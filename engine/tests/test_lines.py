@@ -281,5 +281,65 @@ class WriterVerbTest(LinesBase):
         self.assertIn("already has a line 'what-it-is'", out)
 
 
+    def refused(self, code, out):
+        self.assertEqual(code, 1)
+        self.assertIn("REFUSED", out)
+
+    def test_the_record_must_live_where_validation_reads(self):
+        for rec in ("other.json", "../outside.json", "canon/craft/../../sneaky.json"):
+            code, out = self.add("--approver", "Ada Reyes", "--record", rec)
+            self.refused(code, out)
+            self.assertIn("canon/craft", out)
+        for rel in ("other.json", "sneaky.json"):
+            self.assertFalse((self.dir / rel).exists())
+        self.assertFalse((self.dir.parent / "outside.json").exists())
+
+    def test_a_broken_record_file_is_refused_not_raised(self):
+        for content in ("{bad", "[]"):
+            self.file.write_text(content)
+            code, out = self.add("--approver", "Ada Reyes")
+            self.refused(code, out)
+            self.assertEqual(self.file.read_text(), content)
+
+    def test_a_write_that_raises_is_rolled_back(self):
+        from unittest import mock
+        from agenticstory import lines as L
+        self.add("--approver", "Ada Reyes")
+        before = self.file.read_bytes()
+        rec = json.loads(before)
+        rec["lines"][0]["text"] = "Changed in memory only."
+        with mock.patch("agenticstory.lines.validate_lines", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                L.write(self.dir, self.file, rec)
+            self.assertEqual(self.file.read_bytes(), before)
+            fresh = self.dir / "canon" / "craft" / "fresh.json"
+            with self.assertRaises(RuntimeError):
+                L.write(self.dir, fresh, rec)
+            self.assertFalse(fresh.exists())
+
+    def test_retire_refuses_both_a_replacement_and_a_note(self):
+        self.add("--approver", "Ada Reyes", *self.YES)
+        self.run_cli("line-add", str(self.dir), "--id", "other", "--name", "Other", "--for", "f",
+                     "--text", "Another sentence.", "--audience", "public", *self.YES)
+        before = self.file.read_bytes()
+        code, out = self.run_cli("line-retire", str(self.dir), "what-it-is", *self.YES,
+                                 "--instead", "other", "--note", "we stopped saying this")
+        self.refused(code, out)
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_retire_with_a_note_and_no_replacement(self):
+        self.add("--approver", "Ada Reyes", *self.YES)
+        code, _ = self.run_cli("line-retire", str(self.dir), "what-it-is", *self.YES, "--note", "we stopped saying this")
+        self.assertEqual(code, 0)
+        l = self.lines()["what-it-is"]
+        self.assertEqual((l["status"], l["instead"], l["insteadNote"]), ("retired", None, "we stopped saying this"))
+
+    def test_an_unknown_audience_is_refused_and_nothing_is_created(self):
+        code, out = self.run_cli("line-add", str(self.dir), "--id", "x", "--name", "X", "--for", "f",
+                                 "--text", "A sentence.", "--audience", "public,investor", "--approver", "Ada Reyes")
+        self.refused(code, out)
+        self.assertFalse(self.file.exists())
+
+
 if __name__ == "__main__":
     unittest.main()

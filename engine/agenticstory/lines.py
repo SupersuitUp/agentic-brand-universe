@@ -197,11 +197,22 @@ def validate_lines(craft: dict) -> list[str]:
 
 
 def load(root: Path, file: str = DEFAULT_FILE) -> tuple[Path, dict | None]:
-    """The record file's path and its parsed content, or None when the file does not exist."""
-    path = Path(root) / file
+    """The record file's path and its parsed content, or None when the file does not exist.
+    The file must be a .json directly inside <root>/canon/craft, the only place the universe's
+    validation reads, so a write can never land where nothing checks it."""
+    craft = (Path(root) / "canon" / "craft").resolve()
+    path = (Path(root) / file).resolve()
+    if path.parent != craft or path.suffix != ".json":
+        raise LineError(f"the record must be a .json file directly in canon/craft, because that is the only "
+                        f"place the universe's validation reads; got {file}")
     if not path.is_file():
         return path, None
-    rec = json.loads(path.read_text())
+    try:
+        rec = json.loads(path.read_text())
+    except ValueError as e:
+        raise LineError(f"{file} is not valid JSON ({e}); fix or remove it by hand") from e
+    if not isinstance(rec, dict):
+        raise LineError(f"{file} must hold a JSON object, not {type(rec).__name__}; fix it by hand")
     if rec.get("kind") != KIND:
         raise LineError(f"{file} is a craft record of kind {rec.get('kind')!r}, not '{KIND}'")
     return path, rec
@@ -217,7 +228,8 @@ def new_record(approvers: list[str]) -> dict:
             "approvers": list(approvers), "lines": []}
 
 
-def _find(rec: dict, lid: str) -> dict:
+def find(rec: dict, lid: str) -> dict:
+    """The line with this id, or LineError."""
     for l in rec.get("lines") or []:
         if isinstance(l, dict) and l.get("id") == lid:
             return l
@@ -238,7 +250,7 @@ def add(rec: dict, *, id: str, name: str, purpose: str, text: str, audiences: li
 
 
 def bless(rec: dict, lid: str, decided: dict) -> dict:
-    line = _find(rec, lid)
+    line = find(rec, lid)
     if line.get("status") != "candidate":
         raise LineError(f"line '{lid}' is {line.get('status')}, not a candidate; nothing to bless")
     line["status"] = "golden"
@@ -249,7 +261,7 @@ def bless(rec: dict, lid: str, decided: dict) -> dict:
 def reword(rec: dict, lid: str, text: str, decided: dict | None = None) -> dict:
     """New words. A candidate is a draft and is simply replaced. A golden line keeps its old
     wording in `history`, goes up one version, and takes the new yes as its `decided`."""
-    line = _find(rec, lid)
+    line = find(rec, lid)
     if norm(text) == norm(line.get("text", "")):
         raise LineError(f"line '{lid}' already has the same wording; a version is a change of words")
     if line.get("status") == "candidate":
@@ -268,9 +280,11 @@ def reword(rec: dict, lid: str, text: str, decided: dict | None = None) -> dict:
 
 
 def retire(rec: dict, lid: str, decided: dict, instead: str | None = None, note: str | None = None) -> dict:
-    line = _find(rec, lid)
+    line = find(rec, lid)
     if line.get("status") == "retired":
         raise LineError(f"line '{lid}' is already retired")
+    if instead and note:
+        raise LineError("a retired line takes --instead or --note, not both")
     if not instead and not (note and note.strip()):
         raise LineError("a retired line names what to say instead: --instead <a golden line's id>, "
                         "or --note \"why nothing replaces it\"")
@@ -290,10 +304,15 @@ def write(root: Path, path: Path, rec: dict) -> list[str]:
     before = path.read_bytes() if path.is_file() else None
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=2, ensure_ascii=False) + "\n")
-    problems = validate_lines(CanonStore(root).craft)
-    if problems:
-        if before is None:
-            path.unlink()
-        else:
-            path.write_bytes(before)
+    try:
+        problems = validate_lines(CanonStore(root).craft)
+    except BaseException:
+        problems = None
+        raise
+    finally:
+        if problems is None or problems:
+            if before is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(before)
     return problems

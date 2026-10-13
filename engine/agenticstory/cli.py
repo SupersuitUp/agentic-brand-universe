@@ -533,6 +533,55 @@ def main(argv: list[str] | None = None) -> int:
         # entire point of the queue.
         return 1 if any(r.outcome in ("conflict", "error") for r in results) else 0
 
+    if args.cmd in ("line-add", "line-bless", "line-reword", "line-retire"):
+        import datetime
+        from . import lines as _lines
+        # Built here, before the shared CanonStore load below, so a broken record file is a
+        # REFUSED from the writer rather than a traceback from the store; other verbs are unchanged.
+        root = Path(args.universe).resolve()
+        if not (root / "universe.json").is_file():
+            print(f"REFUSED: no universe.json in {root}"); return 1
+        decided = None
+        if args.by or args.verbatim:
+            if not (args.by and args.verbatim):
+                print("REFUSED: a yes is --by AND --verbatim: who said it, and their words"); return 1
+            decided = {"by": args.by, "on": args.on or datetime.date.today().isoformat(), "verbatim": args.verbatim}
+        try:
+            path, rec = _lines.load(root, args.record or _lines.DEFAULT_FILE)
+            if args.cmd == "line-add":
+                if rec is None:
+                    rec = _lines.new_record(args.approver)
+                line = _lines.add(rec, id=args.id, name=args.name, purpose=args.purpose, text=args.text,
+                                  audiences=[a.strip() for a in args.audience.split(",") if a.strip()], decided=decided)
+                said = f"added {line['status']} line '{line['id']}'"
+            else:
+                if rec is None:
+                    raise _lines.LineError("this universe has no lines record; add the first line with `abu line-add`")
+                if args.cmd == "line-bless":
+                    line = _lines.bless(rec, args.line_id, decided)
+                    said = f"line '{line['id']}' is golden, by {decided['by']}"
+                elif args.cmd == "line-reword":
+                    was = _lines.find(rec, args.line_id).get("version")
+                    line = _lines.reword(rec, args.line_id, args.text, decided)
+                    said = (f"line '{line['id']}' reworded, v{was} -> v{line['version']}" if line["version"] != was
+                            else f"candidate line '{line['id']}' reworded")
+                else:
+                    line = _lines.retire(rec, args.line_id, decided, instead=args.instead, note=args.note)
+                    said = f"line '{line['id']}' retired; instead: {line.get('instead') or line.get('insteadNote')}"
+        except _lines.LineError as e:
+            print(f"REFUSED: {e}"); return 1
+        try:
+            problems = _lines.write(root, path, rec)
+        except Exception as e:  # write() has already restored the previous bytes
+            print(f"REFUSED: nothing was written, because the universe would not load: {type(e).__name__}: {e}")
+            return 1
+        if problems:
+            print("REFUSED: nothing was written, because the record would not validate:")
+            for p in problems:
+                print(f"  {p}")
+            return 1
+        print(f"{said}  ({path.relative_to(root)})")
+        return 0
     store = CanonStore(args.universe)
 
     if args.cmd == "validate":
@@ -574,47 +623,6 @@ def main(argv: list[str] | None = None) -> int:
                 text = text if len(text) <= 96 else text[:93] + "..."
                 print(f"  {str(l.get('status')):10} {str(l.get('id')):30} v{l.get('version')}  "
                       f"[{', '.join(l.get('audiences') or [])}]  {text}")
-        return 0
-    if args.cmd in ("line-add", "line-bless", "line-reword", "line-retire"):
-        import datetime
-        from . import lines as _lines
-        root = store.dir
-        decided = None
-        if args.by or args.verbatim:
-            if not (args.by and args.verbatim):
-                print("REFUSED: a yes is --by AND --verbatim: who said it, and their words"); return 1
-            decided = {"by": args.by, "on": args.on or datetime.date.today().isoformat(), "verbatim": args.verbatim}
-        try:
-            path, rec = _lines.load(root, args.record or _lines.DEFAULT_FILE)
-            if args.cmd == "line-add":
-                if rec is None:
-                    rec = _lines.new_record(args.approver)
-                line = _lines.add(rec, id=args.id, name=args.name, purpose=args.purpose, text=args.text,
-                                  audiences=[a.strip() for a in args.audience.split(",") if a.strip()], decided=decided)
-                said = f"added {line['status']} line '{line['id']}'"
-            else:
-                if rec is None:
-                    raise _lines.LineError("this universe has no lines record; add the first line with `abu line-add`")
-                if args.cmd == "line-bless":
-                    line = _lines.bless(rec, args.line_id, decided)
-                    said = f"line '{line['id']}' is golden, by {decided['by']}"
-                elif args.cmd == "line-reword":
-                    was = _lines._find(rec, args.line_id).get("version")
-                    line = _lines.reword(rec, args.line_id, args.text, decided)
-                    said = (f"line '{line['id']}' reworded, v{was} -> v{line['version']}" if line["version"] != was
-                            else f"candidate line '{line['id']}' reworded")
-                else:
-                    line = _lines.retire(rec, args.line_id, decided, instead=args.instead, note=args.note)
-                    said = f"line '{line['id']}' retired; instead: {line.get('instead') or line.get('insteadNote')}"
-        except _lines.LineError as e:
-            print(f"REFUSED: {e}"); return 1
-        problems = _lines.write(root, path, rec)
-        if problems:
-            print("REFUSED: nothing was written, because the record would not validate:")
-            for p in problems:
-                print(f"  {p}")
-            return 1
-        print(f"{said}  ({path.relative_to(root)})")
         return 0
     if args.cmd == "kit":
         from .kit import kits
