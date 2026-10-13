@@ -50,6 +50,9 @@ class CanonStore:
         self.relations: list[Relation] = []
         self.stories: dict[str, StorySpec] = {}
         self.craft: dict[str, CraftCanon] = {}
+        # (id, the file that declared it first, the file that declared it again). `craft` is keyed
+        # by id, so the later file replaces the earlier one in memory; `validate_canon` reports it.
+        self.craft_collisions: list[tuple[str, str, str]] = []
         self.generators: dict[str, Generator] = {}
         self.forms: dict[str, Form] = {}
         self.works: dict[str, Work] = {}
@@ -65,8 +68,14 @@ class CanonStore:
             self.entities[e.id] = e
         craft_dir = self.dir / "canon" / "craft"
         if craft_dir.exists():
+            declared_in: dict[str, str] = {}
             for f in sorted(craft_dir.glob("*.json")):
-                c = CraftCanon.from_dict(json.loads(f.read_text()))
+                # UTF-8 by name: a record's words are not ASCII (a section sign, a curly quote),
+                # and under a C locale the default codec refused a file the engine itself wrote.
+                c = CraftCanon.from_dict(json.loads(f.read_text(encoding="utf-8")))
+                if c.id in declared_in:
+                    self.craft_collisions.append((c.id, declared_in[c.id], f.name))
+                declared_in[c.id] = f.name
                 self.craft[c.id] = c
         gen_dir = self.dir / "generators"
         if gen_dir.is_dir():
@@ -152,6 +161,12 @@ class CanonStore:
             problems += e.validate(subject_approval=self.subject_approval)
         for c in self.craft.values():
             problems += c.validate()
+        # Two files, one id: the dict above holds only the later one, so every reader (this
+        # method included) sees one record and never learns there were two. A second lines file
+        # reusing the approved record's id replaced its approvers this way (v0.61).
+        for cid, first, again in self.craft_collisions:
+            problems.append(f"craft id '{cid}' is declared by both {first} and {again}; "
+                            f"one record would silently replace the other")
         # a relation side may be an entity OR a story (e.g. `wisp appears-in <story>`)
         known = set(self.entities) | set(self.stories)
         for r in self.relations:
