@@ -95,7 +95,9 @@ def _check_versions(where: str, line: dict) -> list[str]:
     v = line.get("version")
     if not isinstance(v, int) or isinstance(v, bool) or v < 1:
         return [f"{where}: version must be a whole number, 1 or more, got {v!r}"]
-    hist = line.get("history") or []
+    hist = line.get("history")
+    if hist is None:
+        hist = []
     if not isinstance(hist, list):
         return [f"{where}: history must be a list"]
     out, got, good = [], [], []
@@ -113,7 +115,8 @@ def _check_versions(where: str, line: dict) -> list[str]:
             out.append(f"{where}: history v{n} has no replacedBy")
         if isinstance(n, int) and not isinstance(n, bool) and _str(h.get("text")):
             good.append((n, h["text"]))
-    if sorted(got, key=str) != sorted(range(1, v), key=str):
+    ints = all(isinstance(n, int) and not isinstance(n, bool) for n in got)
+    if not ints or sorted(got) != list(range(1, v)):
         out.append(f"{where}: is at version {v}, so history must hold versions 1 to {v - 1} once each, got {got}")
     chain = [t for _, t in sorted(good)] + ([line["text"]] if _str(line.get("text")) else [])
     if any(norm(a) == norm(b) for a, b in zip(chain, chain[1:])):
@@ -178,6 +181,8 @@ def validate_lines(craft: dict) -> list[str]:
                 elif l["instead"] is None:
                     if not _str(l.get("insteadNote")):
                         out.append(f"{where}: instead is null, so 'insteadNote' must say why nothing replaces it")
+                elif not isinstance(l["instead"], str):
+                    out.append(f"{where}: instead must be a golden line's id or null, got {l['instead']!r}")
                 elif l["instead"] == lid:
                     out.append(f"{where}: instead names itself")
                 elif status_of.get(l["instead"]) != "golden":

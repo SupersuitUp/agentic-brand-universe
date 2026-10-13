@@ -130,6 +130,17 @@ class ValidateTest(LinesBase):
         retired = dict(twin, status="retired", instead="what-it-is")
         self.assertEqual(self.problems(record(line(), retired)), [])
 
+    def test_wrong_types_are_reported_not_raised(self):
+        for bad in (["a"], {"k": 1}):
+            old = line(id="old-one", text="An older sentence entirely.", status="retired", instead=bad)
+            got = self.joined(record(line(), old))
+            self.assertIn("instead must be a golden line's id or null", got)
+        got = self.joined(record(line(version=2, history=[{"version": True, "text": "The suit you build.",
+                                                          "replacedOn": "2026-10-13", "replacedBy": "Ada Reyes"}])))
+        self.assertIn("history must hold versions 1 to 1 once each", got)
+        self.assertIn("history must be a list", self.joined(record(line(history={}))))
+        self.assertIn("history must be a list", self.joined(record(line(history=""))))
+
     def test_norm_compares_wording_only(self):
         self.assertEqual(norm("The “suit” you\n  build, out of *software* you [own](https://x.y/z)."),
                          'The "suit" you build, out of software you own.')
