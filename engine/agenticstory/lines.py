@@ -194,3 +194,106 @@ def validate_lines(craft: dict) -> list[str]:
                 else:
                     texts[key] = lid if isinstance(lid, str) else f"#{i}"
     return out
+
+
+def load(root: Path, file: str = DEFAULT_FILE) -> tuple[Path, dict | None]:
+    """The record file's path and its parsed content, or None when the file does not exist."""
+    path = Path(root) / file
+    if not path.is_file():
+        return path, None
+    rec = json.loads(path.read_text())
+    if rec.get("kind") != KIND:
+        raise LineError(f"{file} is a craft record of kind {rec.get('kind')!r}, not '{KIND}'")
+    return path, rec
+
+
+def new_record(approvers: list[str]) -> dict:
+    if not approvers:
+        raise LineError("this universe has no lines record yet, so name who can make a line golden: "
+                        "--approver \"Full Name\" (repeat it for each person)")
+    return {"id": "brand-lines", "kind": KIND, "name": "The brand's golden lines",
+            "summary": "Every approved unit of the brand's language, with who made it golden, when and in "
+                       "what words, and every wording it has had. SPEC §13.2.",
+            "approvers": list(approvers), "lines": []}
+
+
+def _find(rec: dict, lid: str) -> dict:
+    for l in rec.get("lines") or []:
+        if isinstance(l, dict) and l.get("id") == lid:
+            return l
+    raise LineError(f"no line '{lid}' in {rec.get('id')}; `abu lines <universe>` lists them")
+
+
+def add(rec: dict, *, id: str, name: str, purpose: str, text: str, audiences: list[str],
+        decided: dict | None = None) -> dict:
+    """A new line: a candidate, or golden when it arrives with a person's yes."""
+    if any(isinstance(l, dict) and l.get("id") == id for l in rec.get("lines") or []):
+        raise LineError(f"{rec.get('id')} already has a line '{id}'; reword it with `abu line-reword`")
+    line = {"id": id, "name": name, "for": purpose, "status": "golden" if decided else "candidate",
+            "text": text, "version": 1, "audiences": list(audiences)}
+    if decided:
+        line["decided"] = dict(decided)
+    rec.setdefault("lines", []).append(line)
+    return line
+
+
+def bless(rec: dict, lid: str, decided: dict) -> dict:
+    line = _find(rec, lid)
+    if line.get("status") != "candidate":
+        raise LineError(f"line '{lid}' is {line.get('status')}, not a candidate; nothing to bless")
+    line["status"] = "golden"
+    line["decided"] = dict(decided)
+    return line
+
+
+def reword(rec: dict, lid: str, text: str, decided: dict | None = None) -> dict:
+    """New words. A candidate is a draft and is simply replaced. A golden line keeps its old
+    wording in `history`, goes up one version, and takes the new yes as its `decided`."""
+    line = _find(rec, lid)
+    if norm(text) == norm(line.get("text", "")):
+        raise LineError(f"line '{lid}' already has the same wording; a version is a change of words")
+    if line.get("status") == "candidate":
+        line["text"] = text
+        return line
+    if line.get("status") != "golden":
+        raise LineError(f"line '{lid}' is {line.get('status')}; a retired line is not reworded")
+    if not decided:
+        raise LineError(f"line '{lid}' is golden, so a new wording needs --by and --verbatim: whose yes, in what words")
+    line.setdefault("history", []).append({"version": line.get("version", 1), "text": line["text"],
+                                           "replacedOn": decided.get("on"), "replacedBy": decided.get("by")})
+    line["version"] = line.get("version", 1) + 1
+    line["text"] = text
+    line["decided"] = dict(decided)
+    return line
+
+
+def retire(rec: dict, lid: str, decided: dict, instead: str | None = None, note: str | None = None) -> dict:
+    line = _find(rec, lid)
+    if line.get("status") == "retired":
+        raise LineError(f"line '{lid}' is already retired")
+    if not instead and not (note and note.strip()):
+        raise LineError("a retired line names what to say instead: --instead <a golden line's id>, "
+                        "or --note \"why nothing replaces it\"")
+    line["status"] = "retired"
+    line["decided"] = dict(decided)
+    line["instead"] = instead or None
+    if not instead:
+        line["insteadNote"] = note
+    return line
+
+
+def write(root: Path, path: Path, rec: dict) -> list[str]:
+    """Put the record on disk and re-validate the universe. On ANY lines problem the previous
+    bytes are restored (or the new file removed) and the problems are returned: an empty list
+    means the record was written and validates."""
+    from .store import CanonStore
+    before = path.read_bytes() if path.is_file() else None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(rec, indent=2, ensure_ascii=False) + "\n")
+    problems = validate_lines(CanonStore(root).craft)
+    if problems:
+        if before is None:
+            path.unlink()
+        else:
+            path.write_bytes(before)
+    return problems

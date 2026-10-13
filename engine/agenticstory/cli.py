@@ -7,6 +7,10 @@ Agentic Brand Universe CLI.
   abu kit <universe> [--json]        # the brand's pieces and no-gos (SPEC §13.1)
   abu check-kit <universe> <path>... # refuse a surface whose source uses a no-go
   abu lines <universe> [--json]      # the brand's golden lines (SPEC §13.2)
+  abu line-add <universe> --id I --name N --for F --text T --audience a,b   # a candidate, or golden with --by/--verbatim
+  abu line-bless <universe> <id> --by B --verbatim V                        # a person's yes makes a candidate golden
+  abu line-reword <universe> <id> --text T --by B --verbatim V              # new words; the old wording is kept
+  abu line-retire <universe> <id> --by B --verbatim V --instead ID          # or --note "why nothing replaces it"
   abu crossovers <universe> <entity> # crossover relations for an entity
   abu assert-story <universe> <id>   # THE pre-render gate for a whole story
   abu assert-spread <universe> --characters a,b [--location X]
@@ -69,6 +73,31 @@ def build_parser() -> argparse.ArgumentParser:
     ln = sub.add_parser("lines", help="list the brand's golden lines (SPEC §13.2 lines records)")
     ln.add_argument("universe"); ln.add_argument("--json", action="store_true")
     ln.add_argument("--status", choices=["candidate", "golden", "retired"])
+    def _line_parser(name, help_, with_id=True, yes_required=True):
+        p = sub.add_parser(name, help=help_)
+        p.add_argument("universe")
+        if with_id:
+            p.add_argument("line_id", metavar="id")
+        p.add_argument("--by", required=yes_required, help="the person whose yes this is (one of the record's approvers)")
+        p.add_argument("--verbatim", required=yes_required, help="their words")
+        p.add_argument("--on", help="the date of the yes, YYYY-MM-DD (default: today)")
+        p.add_argument("--record", default=None, help="the record file inside the universe (default: canon/craft/brand-lines.json)")
+        return p
+    la = _line_parser("line-add", "add a golden line: a candidate, or golden when it arrives with --by and --verbatim",
+                      with_id=False, yes_required=False)
+    la.add_argument("--id", required=True); la.add_argument("--name", required=True)
+    la.add_argument("--for", dest="purpose", required=True, help="what the line is for, in one sentence")
+    la.add_argument("--text", required=True)
+    la.add_argument("--audience", required=True, help="comma-separated: public, client, team, cofounder")
+    la.add_argument("--approver", action="append", default=[],
+                    help="only when the universe has no lines record yet: who can make a line golden (repeatable)")
+    _line_parser("line-bless", "a person's yes makes a candidate line golden")
+    lw = _line_parser("line-reword", "give a line new words; a golden line keeps its old wording and goes up a version",
+                      yes_required=False)
+    lw.add_argument("--text", required=True)
+    lr = _line_parser("line-retire", "retire a line, naming the golden line to say instead")
+    lr.add_argument("--instead", help="the id of the golden line to use instead")
+    lr.add_argument("--note", help="why nothing replaces it, when there is no --instead")
     c = sub.add_parser("crossovers", help="list the crossovers an entity appears in")
     c.add_argument("universe"); c.add_argument("entity")
     rel = sub.add_parser("relations", help="list an entity's typed relations")
@@ -545,6 +574,47 @@ def main(argv: list[str] | None = None) -> int:
                 text = text if len(text) <= 96 else text[:93] + "..."
                 print(f"  {str(l.get('status')):10} {str(l.get('id')):30} v{l.get('version')}  "
                       f"[{', '.join(l.get('audiences') or [])}]  {text}")
+        return 0
+    if args.cmd in ("line-add", "line-bless", "line-reword", "line-retire"):
+        import datetime
+        from . import lines as _lines
+        root = store.dir
+        decided = None
+        if args.by or args.verbatim:
+            if not (args.by and args.verbatim):
+                print("REFUSED: a yes is --by AND --verbatim: who said it, and their words"); return 1
+            decided = {"by": args.by, "on": args.on or datetime.date.today().isoformat(), "verbatim": args.verbatim}
+        try:
+            path, rec = _lines.load(root, args.record or _lines.DEFAULT_FILE)
+            if args.cmd == "line-add":
+                if rec is None:
+                    rec = _lines.new_record(args.approver)
+                line = _lines.add(rec, id=args.id, name=args.name, purpose=args.purpose, text=args.text,
+                                  audiences=[a.strip() for a in args.audience.split(",") if a.strip()], decided=decided)
+                said = f"added {line['status']} line '{line['id']}'"
+            else:
+                if rec is None:
+                    raise _lines.LineError("this universe has no lines record; add the first line with `abu line-add`")
+                if args.cmd == "line-bless":
+                    line = _lines.bless(rec, args.line_id, decided)
+                    said = f"line '{line['id']}' is golden, by {decided['by']}"
+                elif args.cmd == "line-reword":
+                    was = _lines._find(rec, args.line_id).get("version")
+                    line = _lines.reword(rec, args.line_id, args.text, decided)
+                    said = (f"line '{line['id']}' reworded, v{was} -> v{line['version']}" if line["version"] != was
+                            else f"candidate line '{line['id']}' reworded")
+                else:
+                    line = _lines.retire(rec, args.line_id, decided, instead=args.instead, note=args.note)
+                    said = f"line '{line['id']}' retired; instead: {line.get('instead') or line.get('insteadNote')}"
+        except _lines.LineError as e:
+            print(f"REFUSED: {e}"); return 1
+        problems = _lines.write(root, path, rec)
+        if problems:
+            print("REFUSED: nothing was written, because the record would not validate:")
+            for p in problems:
+                print(f"  {p}")
+            return 1
+        print(f"{said}  ({path.relative_to(root)})")
         return 0
     if args.cmd == "kit":
         from .kit import kits

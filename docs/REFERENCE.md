@@ -96,6 +96,10 @@ answers questions about it, and refuses renders whose references do not exist on
 | `init` | scaffold a new universe (conforms to spec v0.60) |
 | `kit` | list the brand's pieces and no-gos (SPEC §13.1 kit records) |
 | `land` | merge a finished work branch home, or queue it if that is not safe yet |
+| `line-add` | add a golden line: a candidate, or golden when it arrives with --by and --verbatim |
+| `line-bless` | a person's yes makes a candidate line golden |
+| `line-retire` | retire a line, naming the golden line to say instead |
+| `line-reword` | give a line new words; a golden line keeps its old wording and goes up a version |
 | `lines` | list the brand's golden lines (SPEC §13.2 lines records) |
 | `list` | list every entity in a universe |
 | `list-craft` | list a universe's craft-canon records |

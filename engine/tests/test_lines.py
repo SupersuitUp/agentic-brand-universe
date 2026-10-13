@@ -179,5 +179,107 @@ class ListVerbTest(LinesBase):
         self.assertEqual(json.loads(out), [])
 
 
+class WriterVerbTest(LinesBase):
+    YES = ["--by", "Ada Reyes", "--on", "2026-10-13", "--verbatim", "yes, that is the one"]
+
+    def run_cli(self, *argv):
+        with redirect_stdout(io.StringIO()) as out:
+            code = main(list(argv))
+        return code, out.getvalue()
+
+    def lines(self):
+        return {l["id"]: l for l in json.loads(self.file.read_text())["lines"]}
+
+    def add(self, *extra):
+        return self.run_cli("line-add", str(self.dir), "--id", "what-it-is", "--name", "What it is",
+                            "--for", "the answer when someone asks", "--text", "The suit you build.",
+                            "--audience", "public,client", *extra)
+
+    def test_the_first_add_needs_approvers_and_then_creates_the_record(self):
+        code, out = self.add()
+        self.assertEqual(code, 1)
+        self.assertIn("--approver", out)
+        self.assertFalse(self.file.exists())
+        code, out = self.add("--approver", "Ada Reyes", "--approver", "Ben Okafor")
+        self.assertEqual(code, 0)
+        rec = json.loads(self.file.read_text())
+        self.assertEqual((rec["kind"], rec["approvers"]), ("lines", ["Ada Reyes", "Ben Okafor"]))
+        l = self.lines()["what-it-is"]
+        self.assertEqual((l["status"], l["version"], l["audiences"]), ("candidate", 1, ["public", "client"]))
+        self.assertNotIn("decided", l)
+        self.assertEqual([p for p in CanonStore(self.dir).validate_canon() if p.startswith("lines ")], [])
+
+    def test_add_with_a_yes_is_golden_and_bless_makes_a_candidate_golden(self):
+        self.add("--approver", "Ada Reyes", *self.YES)
+        self.assertEqual(self.lines()["what-it-is"]["status"], "golden")
+        self.run_cli("line-add", str(self.dir), "--id", "two", "--name", "Two", "--for", "f",
+                     "--text", "Another sentence.", "--audience", "team")
+        code, _ = self.run_cli("line-bless", str(self.dir), "two", *self.YES)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.lines()["two"]["decided"]["verbatim"], "yes, that is the one")
+
+    def test_a_yes_from_a_non_approver_changes_nothing(self):
+        self.add("--approver", "Ada Reyes")
+        before = self.file.read_bytes()
+        code, out = self.run_cli("line-bless", str(self.dir), "what-it-is",
+                                 "--by", "An Agent", "--on", "2026-10-13", "--verbatim", "looks right")
+        self.assertEqual(code, 1)
+        self.assertIn("REFUSED", out)
+        self.assertIn("not one of this record's approvers", out)
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_reword_keeps_the_old_wording_and_bumps_the_version(self):
+        self.add("--approver", "Ada Reyes", *self.YES)
+        code, out = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "The suit you build out of software you own.",
+                                 "--by", "Ada Reyes", "--on", "2026-10-20", "--verbatim", "say software you own")
+        self.assertEqual(code, 0)
+        self.assertIn("v1 -> v2", out)
+        l = self.lines()["what-it-is"]
+        self.assertEqual(l["version"], 2)
+        self.assertEqual(l["text"], "The suit you build out of software you own.")
+        self.assertEqual(l["history"], [{"version": 1, "text": "The suit you build.",
+                                         "replacedOn": "2026-10-20", "replacedBy": "Ada Reyes"}])
+        self.assertEqual(l["decided"]["verbatim"], "say software you own")
+        self.assertEqual([p for p in CanonStore(self.dir).validate_canon() if p.startswith("lines ")], [])
+
+    def test_rewording_a_golden_line_needs_a_yes_and_new_words(self):
+        self.add("--approver", "Ada Reyes", *self.YES)
+        before = self.file.read_bytes()
+        code, out = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "Something else.")
+        self.assertEqual(code, 1)
+        self.assertIn("needs --by and --verbatim", out)
+        code, out = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "The  suit you *build*.", *self.YES)
+        self.assertEqual(code, 1)
+        self.assertIn("same wording", out)
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_rewording_a_candidate_is_free_and_keeps_no_history(self):
+        self.add("--approver", "Ada Reyes")
+        code, _ = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "A better draft.")
+        self.assertEqual(code, 0)
+        l = self.lines()["what-it-is"]
+        self.assertEqual((l["version"], l["text"], l.get("history")), (1, "A better draft.", None))
+
+    def test_retire_names_a_replacement_or_a_reason(self):
+        self.add("--approver", "Ada Reyes", *self.YES)
+        self.run_cli("line-add", str(self.dir), "--id", "old", "--name", "Old", "--for", "f",
+                     "--text", "An older sentence.", "--audience", "public", *self.YES)
+        code, out = self.run_cli("line-retire", str(self.dir), "old", *self.YES)
+        self.assertEqual(code, 1)
+        self.assertIn("--instead", out)
+        code, _ = self.run_cli("line-retire", str(self.dir), "old", *self.YES, "--instead", "what-it-is")
+        self.assertEqual(code, 0)
+        self.assertEqual((self.lines()["old"]["status"], self.lines()["old"]["instead"]), ("retired", "what-it-is"))
+
+    def test_unknown_ids_and_duplicates_are_refused(self):
+        self.add("--approver", "Ada Reyes")
+        code, out = self.run_cli("line-bless", str(self.dir), "nope", *self.YES)
+        self.assertEqual(code, 1)
+        self.assertIn("no line 'nope'", out)
+        code, out = self.add()
+        self.assertEqual(code, 1)
+        self.assertIn("already has a line 'what-it-is'", out)
+
+
 if __name__ == "__main__":
     unittest.main()
