@@ -96,6 +96,7 @@ answers questions about it, and refuses renders whose references do not exist on
 | `init` | scaffold a new universe (conforms to spec v0.60) |
 | `kit` | list the brand's pieces and no-gos (SPEC §13.1 kit records) |
 | `land` | merge a finished work branch home, or queue it if that is not safe yet |
+| `lines` | list the brand's golden lines (SPEC §13.2 lines records) |
 | `list` | list every entity in a universe |
 | `list-craft` | list a universe's craft-canon records |
 | `lock-level` | report how locked an entity is (which matrix slots are filled) |

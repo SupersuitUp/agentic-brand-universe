@@ -6,6 +6,7 @@ Agentic Brand Universe CLI.
   abu list-craft <universe>          # craft-canon records (spine/genre/register-rule/kit)
   abu kit <universe> [--json]        # the brand's pieces and no-gos (SPEC §13.1)
   abu check-kit <universe> <path>... # refuse a surface whose source uses a no-go
+  abu lines <universe> [--json]      # the brand's golden lines (SPEC §13.2)
   abu crossovers <universe> <entity> # crossover relations for an entity
   abu assert-story <universe> <id>   # THE pre-render gate for a whole story
   abu assert-spread <universe> --characters a,b [--location X]
@@ -65,6 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
     ck = sub.add_parser("check-kit", help="refuse a surface whose source files use a no-go the kit can detect")
     ck.add_argument("universe"); ck.add_argument("paths", nargs="+", help="files or directories to scan")
     ck.add_argument("--json", action="store_true")
+    ln = sub.add_parser("lines", help="list the brand's golden lines (SPEC §13.2 lines records)")
+    ln.add_argument("universe"); ln.add_argument("--json", action="store_true")
+    ln.add_argument("--status", choices=["candidate", "golden", "retired"])
     c = sub.add_parser("crossovers", help="list the crossovers an entity appears in")
     c.add_argument("universe"); c.add_argument("entity")
     rel = sub.add_parser("relations", help="list an entity's typed relations")
@@ -524,6 +528,23 @@ def main(argv: list[str] | None = None) -> int:
         print("stories:")
         for s in store.stories.values():
             print(f"  {s.id:24s} spine={s.raw.get('spine')} features={len(s.features)} beats={len(s.beats)}")
+        return 0
+    if args.cmd == "lines":
+        from .lines import records
+        recs = records(store.craft)
+        keep = lambda l: isinstance(l, dict) and (not args.status or l.get("status") == args.status)
+        if args.json:
+            print(json.dumps([l for r in recs for l in (r.get("lines") or []) if keep(l)], indent=2))
+            return 0
+        if not recs:
+            print("no lines: this universe records no golden lines (SPEC §13.2)"); return 0
+        for r in recs:
+            print(f"lines {r.get('id')}: {r.get('name', '')}  approvers: {', '.join(r.get('approvers') or [])}")
+            for l in (x for x in (r.get("lines") or []) if keep(x)):
+                text = " ".join(str(l.get("text", "")).split())
+                text = text if len(text) <= 96 else text[:93] + "..."
+                print(f"  {str(l.get('status')):10} {str(l.get('id')):30} v{l.get('version')}  "
+                      f"[{', '.join(l.get('audiences') or [])}]  {text}")
         return 0
     if args.cmd == "kit":
         from .kit import kits

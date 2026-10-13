@@ -147,5 +147,37 @@ class ValidateTest(LinesBase):
         self.assertNotEqual(norm("the suit"), norm("The suit"))
 
 
+class ListVerbTest(LinesBase):
+    def run_cli(self, *argv):
+        with redirect_stdout(io.StringIO()) as out:
+            code = main(list(argv))
+        return code, out.getvalue()
+
+    def test_it_lists_every_line_with_its_status_and_version(self):
+        cand = line(id="maybe", text="A sentence nobody has approved.", status="candidate"); cand.pop("decided")
+        self.file.write_text(json.dumps(record(line(), cand)))
+        code, out = self.run_cli("lines", str(self.dir))
+        self.assertEqual(code, 0)
+        self.assertIn("lines brand-lines: Lines", out)
+        self.assertIn("approvers: Ada Reyes, Ben Okafor", out)
+        self.assertRegex(out, r"golden\s+what-it-is\s+v1\s+\[public, client\]")
+        self.assertRegex(out, r"candidate\s+maybe\s+v1")
+        self.assertIn("The suit you build out of software you own.", out)
+
+    def test_status_filters_and_json_is_the_lines(self):
+        cand = line(id="maybe", text="A sentence nobody has approved.", status="candidate"); cand.pop("decided")
+        self.file.write_text(json.dumps(record(line(), cand)))
+        code, out = self.run_cli("lines", str(self.dir), "--status", "golden", "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual([l["id"] for l in json.loads(out)], ["what-it-is"])
+
+    def test_a_universe_with_no_record_says_so(self):
+        code, out = self.run_cli("lines", str(self.dir))
+        self.assertEqual(code, 0)
+        self.assertIn("no lines: this universe records no golden lines (SPEC §13.2)", out)
+        code, out = self.run_cli("lines", str(self.dir), "--json")
+        self.assertEqual(json.loads(out), [])
+
+
 if __name__ == "__main__":
     unittest.main()
