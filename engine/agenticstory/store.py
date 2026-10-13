@@ -189,6 +189,8 @@ class CanonStore:
         problems += validate_surfaces(self.dir, self.manifest)
         from .kit import validate_kits
         problems += validate_kits(self.dir, self.craft)
+        from .lines import validate_lines
+        problems += validate_lines(self.craft)
         return problems
 
     def _validate_works(self) -> list[str]:

@@ -699,13 +699,13 @@ class Entity:
         return p
 
 
-CRAFT_KINDS = {"spine", "genre", "register-rule", "kit"}  # kit: SPEC §13.1, v0.60
+CRAFT_KINDS = {"spine", "genre", "register-rule", "kit", "lines"}  # kit: §13.1, v0.60; lines: §13.2, v0.61
 
 
 @dataclass
 class CraftCanon:
     """A typed craft-canon record: a spine, a genre, a register-rule the
-    renderer honors, or a kit of brand pieces and no-gos (SPEC §13.1, checked by kit.py). Craft is data, not skill prose (SPEC §11, §13)."""
+    renderer honors, a kit of brand pieces and no-gos (SPEC §13.1, checked by kit.py), or the brand's golden lines (SPEC §13.2, checked by lines.py). Craft is data, not skill prose (SPEC §11, §13)."""
     id: str
     kind: str
     raw: dict[str, Any] = field(default_factory=dict)
