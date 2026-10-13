@@ -35,22 +35,28 @@ say the same thing in different words.
 
 1. `abu lines <universe>`: is the wording already a line?
 2. A new line: `abu line-add` (a candidate, or golden with `--by` and `--verbatim`; `--approver`
-   once per person on the first line).
+   once per person on the universe's first line only, and refused after it).
 3. A candidate a person approved: `abu line-bless`.
 4. New words for a golden line: `abu line-reword` (the old wording goes to history, the version
    goes up by one).
-5. A line the brand stopped saying: `abu line-retire` with `--instead <golden id>` or `--note`.
+5. A line the brand stopped saying: `abu line-retire` with `--instead <line id>` (a golden line,
+   or a retired one that has an `instead` of its own) or `--note`.
 6. `abu lines <universe>` to read it back; commit the record file by name.
 
 # Outputs
 
-One changed line in `canon/craft/brand-lines.json`, committed by name. Done means `abu validate
+One changed line in the universe's lines record (`canon/craft/brand-lines.json`, unless the
+operator keeps it under another name), committed by name. Done means `abu validate
 <universe>` prints no line starting `lines ` and `abu lines <universe>` shows the change.
 
 # Failure modes
 
-- Recording an agent's own preference as golden. `validate` refuses it because the approver list
-  does not contain the agent; the decision only a human makes is the yes itself and who may give it.
+- Recording an agent's own preference as golden. `validate` refuses a yes from a name not on the
+  approver list. It cannot tell whether the named person said the words, which is why the
+  verbatim is the person's actual words and never composed. The decision only a human makes is
+  the yes itself and who may give it.
+- Naming an approver the operator did not name, on the first line. No code can refuse it; the
+  list is the operator's, asked for and never guessed.
 - A second id for a sentence the record already holds (two sources of truth).
 - Deleting a history entry (the record can no longer find a page carrying the old wording).
 - Hand-editing `version`, `history` or `decided` instead of using the verbs.

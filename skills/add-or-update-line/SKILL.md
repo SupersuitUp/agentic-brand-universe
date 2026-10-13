@@ -22,6 +22,9 @@ line is the lines check, which reads this record.
 
 ## Method
 
+`abu <verb>` is the engine CLI. When `abu` is not on PATH, run the same verb from the engine
+directory: `(cd "$ABU/engine" && python3 -m agenticstory.cli <verb> ...)`.
+
 1. **Look first.** `abu lines <universe>`. If the wording, or a near version of it, is already
    there, this is a reword of that line and never a new one.
 2. **A new line.** A candidate:
@@ -29,13 +32,18 @@ line is the lines check, which reads this record.
    Golden on arrival, when a person has already said yes: add `--by "<their name>" --verbatim "<their words>"`
    (and `--on YYYY-MM-DD` when the yes was not today).
    The first line in a universe also needs `--approver "<Full Name>"`, once per person whose yes
-   counts. Ask who that is; never guess it.
+   counts. Ask who that is; never guess it. That first `line-add` creates
+   `canon/craft/brand-lines.json`. After it `--approver` is refused: a verb never changes who can
+   approve and never creates a second record.
 3. **A candidate a person just approved.** `abu line-bless <universe> <id> --by "<name>" --verbatim "<their words>"`.
 4. **New words for a golden line.** `abu line-reword <universe> <id> --text "<new wording>" --by "<name>" --verbatim "<their words>"`.
    The old wording moves into the line's history and the version goes up by one. Never delete a
-   history entry: an earlier wording is how an out-of-date page gets found.
-5. **A line the brand stopped saying.** `abu line-retire <universe> <id> --by "<name>" --verbatim "<their words>" --instead <golden-line-id>`,
-   or `--note "<why nothing replaces it>"` when nothing does.
+   history entry: an earlier wording is how an out-of-date page gets found. A candidate is
+   reworded with `--text` alone; it takes its yes from `line-bless`.
+5. **A line the brand stopped saying.** `abu line-retire <universe> <id> --by "<name>" --verbatim "<their words>" --instead <line-id>`,
+   or `--note "<why nothing replaces it>"` when nothing does. `--instead` names a golden line.
+   It may name a retired one, whose own `instead` then says where to go; a line that was named
+   as someone's `instead` can itself be retired later.
 6. **Read back what changed** with `abu lines <universe>`, and commit the record file by name.
 
 ## What the verbs refuse, and what to do
@@ -49,10 +57,38 @@ line is the lines check, which reads this record.
 - **"nothing was written, because the record would not validate"**: the listed defects are in the
   record as it stood plus your change. Fix the change. The file on disk is untouched.
 - **"must be a .json file directly in canon/craft"**: `--record` named a file the universe's validation does not read. Leave `--record` off unless the universe keeps more than one lines record.
+- **"--record selects an existing lines record; <file> is not one. A verb creates the universe's
+  first lines record at canon/craft/brand-lines.json and never a second one."**: `--record` only
+  chooses among records that already exist. Drop it.
+- **"this universe has N lines records (...); say which one with --record"**: the operator keeps
+  more than one. Ask which record the line belongs in and pass that file.
+- **"this universe already has a lines record; its approvers are ... Who can approve is changed
+  by the operator in the record file, never by a verb."**: you passed `--approver` to a universe
+  that has a record. Drop it. If the yes came from someone not listed, the line is a candidate.
+- **"a yes is --by AND --verbatim: who said it, and their words"**: one of the two is missing or
+  empty. Without the person's words there is no yes; record a candidate.
+- **"is a candidate: reword it without a yes, then make it golden with line-bless"**: you gave
+  `--by` while rewording a candidate. Reword first, bless second.
+- **"instead names '<id>', which is not a golden or retired line"**: the replacement is a
+  candidate or does not exist. Bless it first, or name another line.
+- **"instead chain loops: a -> b -> a"**: the retired lines point at each other in a circle, so
+  none of them says what to use. Point the last one at a golden line, or use `--note`.
+- **"is not the record the universe loaded for this id (another file declares the same id)"**:
+  two files in `canon/craft` carry one record id, so nothing checked the write. Stop and tell the
+  operator; which file is the record is their call. `abu validate` names both files.
+- **"could not be read as UTF-8"** or **"nothing was written: ... could not be written"**: the
+  record file itself is the problem (its encoding, or the disk). The file is as it was. Tell the
+  operator; never delete or recreate the record.
 
 ## Refusals
 
 - **Never make a line golden on your own reading.** Harvesting, drafting and proposing produce
   candidates. Golden is a person's recorded yes.
-- **Never hand-edit the record's `version`, `history` or `decided`.** The verbs keep them true.
+- **Never compose `--verbatim`.** It is the person's actual words. The engine can check that a
+  name is on the list; it cannot check that the person spoke. If you do not have their words, the
+  line is a candidate.
+- **Never pass `--approver` for a name the operator did not give you, and never to a universe
+  that already has a lines record.** Who can approve is the operator's decision, made once.
+- **Never hand-edit the record's `version`, `history`, `decided` or `approvers`.** The verbs keep
+  the first three true, and `approvers` is the operator's to change.
 - **Never restate a term rule as a line.** Spelling and capitalization live in `identity.voice`.

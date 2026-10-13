@@ -13,7 +13,10 @@ documentation brand: explanatory plates, ink-line illustration, share cards, a s
 > `decided` {by, on, verbatim}. `validate` refuses a golden line with no recorded yes or a yes
 > from a non-approver, a version that disagrees with its history, and a duplicate wording.
 > `abu lines` lists them; `abu line-add`, `line-bless`, `line-reword` and `line-retire` are the
-> only writers, and a write `validate` would refuse is rolled back.
+> only writers, and a write `validate` would refuse is rolled back. A verb creates only a
+> universe's first lines record and never changes its `approvers`. For every craft kind,
+> `validate` now also refuses one craft `id` declared by two files in `canon/craft`, which used
+> to let the later file replace the earlier one with no word said.
 
 > **v0.60 changelog — the KIT: a universe catalogs its brand's pieces and no-gos, and a gate
 > reads the no-gos.** §13.1: a craft-canon record of the new kind `kit` holds `pieces` (a
@@ -2932,7 +2935,9 @@ rule text, icon notes and project STATE files. Nothing could READ a refusal, so 
 long as somebody remembered it, and a refused shape could sit in canon itself as the instruction.
 
 A kit is a craft-canon record with `"kind": "kit"` (a universe may have more than one; ids are
-unique across all of them):
+unique across all of them). Since v0.61 `validate` refuses two files in `canon/craft` that carry
+the same record `id`, for a kit and every other craft kind: the store keeps one record per id,
+so the later file used to replace the earlier one silently. The shape:
 
 ```jsonc
 {
@@ -3005,8 +3010,9 @@ why to believe it. Before v0.61 a universe could hold the TERMS those sentences 
 typed, every other page saying the same thing was a copy with no link back, and a changed wording
 reached none of them.
 
-A lines record is a craft-canon record with `"kind": "lines"` (a universe may have more than one;
-line ids are unique across all of them):
+A lines record is a craft-canon record with `"kind": "lines"`. A universe normally has one. It
+may have more than one only when the operator made the others by hand, since a verb creates the
+first and never a second; line ids are unique across all of them:
 
 ```jsonc
 {
@@ -3023,7 +3029,7 @@ line ids are unique across all of them):
     "decided": { "by": "Ada Reyes", "on": "2026-10-20", "verbatim": "say software you own" },
     "history": [{ "version": 1, "text": "The suit you build.",
                   "replacedOn": "2026-10-20", "replacedBy": "Ada Reyes" }],
-    "instead": "another-line-id"               // retired only: a golden line's id, or null plus "insteadNote"
+    "instead": "another-line-id"               // retired only: the id of a golden or retired line, or null plus "insteadNote"
   }]
 }
 ```
@@ -3038,31 +3044,74 @@ saying; it stays in the record with what to say instead, because a page may stil
 stricter: a kit item harvested from canon may cite a `source` in place of a verbatim, but canon
 that states a sentence is evidence that the sentence was used, never that someone approved it.
 
+**What the record cannot prove.** The engine checks that `decided.by` is a listed approver and
+that words are recorded. It cannot check that the person spoke them. The record is evidence,
+reviewable in the diff, never proof. Three things are therefore rules for whoever runs the verbs
+and are not enforced by code: `--verbatim` is the person's actual words, never composed for
+them; `--approver` on the first line names people the operator named; the record file is not
+edited by hand to add an approver. A verb never creates a second record and never changes
+`approvers`.
+
 **History is kept, always.** Every earlier wording stays in `history` with the date it was
 replaced and by whom. The record needs it to say what a line used to be, and a check needs it to
 FIND an out-of-date page: a surface carrying an earlier wording of a line is out of date, and it
 is found by searching for that wording, with nothing declared in the surface.
 
-**What `validate` refuses**, every defect at once: a record with no `approvers`; a line with no
-`name`, `for` or `text`; a `status` outside the three; an `audiences` list that is empty or names
-anything but `public`, `client`, `team`, `cofounder`; a golden or retired line with no `decided`,
-a `decided.by` who is not an approver, a date that is not `YYYY-MM-DD`, or no `verbatim`; a
-candidate that carries a `decided`; a `version` that is not a whole number of 1 or more, or a
-`history` that does not hold versions 1 to `version - 1` exactly once each; two consecutive
-versions with the same wording; a retired line with no `instead`, a null `instead` with no
-`insteadNote`, or an `instead` that names itself or anything but a golden line; a duplicate id;
-two live lines with the same wording.
+**What `validate` refuses**, every defect at once.
+
+- In a record: `approvers` that is not a list of at least one name; `lines` that is not a list;
+  a line that is not an object.
+- In a line's identity: an `id` that is not kebab-case, or one already used by another line in
+  any lines record; a missing `name`, `for` or `text`; a `status` outside the three; `audiences`
+  that is not a list of at least one, or that names anything but `public`, `client`, `team`,
+  `cofounder`.
+- In the yes: a golden or retired line with no `decided`, no `decided.by`, a `decided.by` who is
+  not one of the record's approvers, a `decided.on` that is not a real calendar date written
+  `YYYY-MM-DD` (`2026-02-30` is refused), or no `decided.verbatim`; a candidate that carries a
+  `decided`.
+- In the versions: a `version` that is not a whole number of 1 or more; a `history` that is not
+  a list; a history entry that is not an object, or that lacks `text`, a real `YYYY-MM-DD`
+  `replacedOn`, or `replacedBy`; a `history` that does not hold versions 1 to `version - 1`
+  exactly once each; two consecutive versions with the same wording.
+- In a retired line: no `instead`; a null `instead` with no `insteadNote`; an `instead` that is
+  neither a string nor null; an `instead` that names itself, a line that does not exist, or a
+  candidate. `instead` may name a golden line or another retired line, since the line it names
+  may itself have been retired later, and then that line's own `instead` says where to go. A
+  chain ends at a golden line or at a retired line whose `instead` is null. A chain that loops
+  (`a -> b -> a`) is refused.
+- Across lines: two lines that are not retired with the same wording, in one record or two.
+- Across craft files, for every craft kind: one record `id` declared by two files in
+  `canon/craft`, reported with both filenames.
 
 **Same wording** means equal after removing what is not wording: line breaks and runs of space,
 curly quotation marks, markdown emphasis marks, and the link around a linked word. Case is kept.
 
-**The verbs.** `abu lines <universe> [--status S] [--json]` lists. `abu line-add` records a
-candidate, or a golden line when it arrives with `--by` and `--verbatim`; the first one in a
-universe creates `canon/craft/brand-lines.json` and needs `--approver` once per person. A record is always a `.json` file directly inside `canon/craft`, because that is the only place `validate` reads; `--record` naming anything else is refused.
+**The verbs.** `abu lines <universe> [--status S] [--json]` lists, and never raises on a
+hand-edited record: it prints what is there and `validate` says what is wrong with it. `abu
+line-add` records a candidate, or a golden line when it arrives with `--by` and `--verbatim`.
 `abu line-bless` makes a candidate golden. `abu line-reword` gives a line new words: a candidate
-is replaced, a golden line moves its old wording into `history`, goes up one version and takes
-the new yes. `abu line-retire` retires a line with `--instead <id>` or `--note`, one or the other. Each write is
-re-validated through a fresh store, and the previous bytes are restored when validation refuses or raises, so no verb leaves a record `validate` would reject. A record file that is not valid JSON is refused, never raised. The scaffolding skill is `add-or-update-line`.
+is replaced and takes no yes (a `--by` there is refused, never dropped), a golden line moves its
+old wording into `history`, goes up one version and takes the new yes. `abu line-retire` retires
+a line with `--instead <id>` (a golden line, or a retired one) or `--note`, one or the other. A
+yes is `--by` and `--verbatim` together, neither of them empty.
+
+**Which record a verb changes.** The universe's one lines record, whatever its filename. When
+there are several, `--record <file>` says which, and it must name one that already exists;
+without it the verb is refused with their names. A verb creates a record only when the universe
+has none, only at `canon/craft/brand-lines.json`, with the file's stem as its `id`, and that
+first `line-add` needs `--approver` once per person. Once a record exists `--approver` is
+refused, never ignored: who can approve is changed by the operator in the record file. A record
+is always a `.json` file directly inside `canon/craft`, because that is the only place
+`validate` reads; `--record` naming anything else is refused.
+
+**What a write guarantees.** The new content goes to a temporary file beside the record and is
+moved into place in one step, as UTF-8 whatever the locale, so a write that fails leaves the
+record exactly as it was. Each write is then re-validated through a fresh store, which must
+have loaded THIS file for the record's `id`. When it loaded another file's record, or two files
+declare that `id`, or validation refuses or raises, the previous bytes are restored (or the new
+file removed). No verb leaves a record `validate` would reject, and none reports a write nothing
+validated. A record file that is not valid JSON, or not UTF-8, is refused, never raised. The
+scaffolding skill is `add-or-update-line`.
 
 **What is not here yet.** A register of the surfaces a universe governs, the scan that finds a
 line on them, the generated map of which surface carries which line, and the check that fails
