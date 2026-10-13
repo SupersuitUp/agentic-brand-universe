@@ -1,10 +1,19 @@
 # Agentic Brand Universe — Cartridge Spec
 
-**v0.60 — 2026-10-06.** The version-controlled brand-universe (cartridge) format: the first-principles
+**v0.61 — 2026-10-13.** The version-controlled brand-universe (cartridge) format: the first-principles
 architecture for a brand as version-controlled canon + golden assets, agentically writable,
 composable, and evolvable, rendered into any deliverable. Home: `agenticbranduniverse.com`.
 Reference implementations: the Nation of Fire universe (storybooks) and Build on Anthropic (a
 documentation brand: explanatory plates, ink-line illustration, share cards, a slide deck).
+
+> **v0.61 changelog — the LINES: a universe holds its brand's approved language, with every
+> wording it has had.** §13.2: a craft-canon record of the new kind `lines` names its `approvers`
+> and holds `lines`, each an id, a name, what it is for, its `text`, a `version`, a `history` of
+> every earlier wording, the `audiences` it may reach, a `status` (candidate, golden, retired) and
+> `decided` {by, on, verbatim}. `validate` refuses a golden line with no recorded yes or a yes
+> from a non-approver, a version that disagrees with its history, and a duplicate wording.
+> `abu lines` lists them; `abu line-add`, `line-bless`, `line-reword` and `line-retire` are the
+> only writers, and a write `validate` would refuse is rolled back.
 
 > **v0.60 changelog — the KIT: a universe catalogs its brand's pieces and no-gos, and a gate
 > reads the no-gos.** §13.1: a craft-canon record of the new kind `kit` holds `pieces` (a
@@ -2907,6 +2916,7 @@ in `canon/craft/*.json`, loaded and validated by the engine:
 - **register-rule** — a universe-wide visual or narrative law (e.g. "gold belongs to God",
   "testimony over prediction", "awe not horror") the renderer honors on every unit.
 - **kit** (v0.60) — the brand's catalog of PIECES and NO-GOS, read by a gate. See §13.1.
+- **lines** (v0.61) — the brand's approved LANGUAGE, one golden line at a time. See §13.2.
 
 Each record: `{ id, kind, name, summary, rules, origin }`. `rules` (or `summary`) is required; `origin`
 records where a rule was discovered. The collection is OPTIONAL: a universe with no `canon/craft/`
@@ -2986,6 +2996,81 @@ Gary: "I really don't like it when you ... use the stripes like the way you did 
 make it like a full multi-border instead of just a left border ... And I want whatever you do with
 that to be part of the ABU, as like, I think the ABU should be cataloging all these different Lego
 pieces of the brand and no-goes."
+
+### 13.2 The lines: a brand's approved language (v0.61)
+
+A brand says a small number of things over and over: what it is, what it is for, who it is for,
+why to believe it. Before v0.61 a universe could hold the TERMS those sentences use
+(`identity.voice`) and nothing else about them. An approved sentence lived wherever it was last
+typed, every other page saying the same thing was a copy with no link back, and a changed wording
+reached none of them.
+
+A lines record is a craft-canon record with `"kind": "lines"` (a universe may have more than one;
+line ids are unique across all of them):
+
+```jsonc
+{
+  "id": "brand-lines", "kind": "lines", "name": "...", "summary": "...",
+  "approvers": ["Ada Reyes", "Ben Okafor"],   // whose yes makes a line golden; any ONE is enough
+  "lines": [{
+    "id": "what-it-is",                        // kebab-case
+    "name": "What it is",
+    "for": "the answer when someone asks what the product is",
+    "status": "golden",                        // candidate | golden | retired
+    "text": "The suit you build out of software you own.",
+    "version": 2,                              // goes up by one each time the text changes
+    "audiences": ["public", "client"],         // any of: public, client, team, cofounder
+    "decided": { "by": "Ada Reyes", "on": "2026-10-20", "verbatim": "say software you own" },
+    "history": [{ "version": 1, "text": "The suit you build.",
+                  "replacedOn": "2026-10-20", "replacedBy": "Ada Reyes" }],
+    "instead": "another-line-id"               // retired only: a golden line's id, or null plus "insteadNote"
+  }]
+}
+```
+
+**Three statuses.** A `candidate` is a wording somebody proposed: a harvest, a draft, an agent's
+suggestion. It carries no `decided`, fails no gate and reaches no surface. A `golden` line is one
+an approver said yes to, and the yes is on the record. A `retired` line is one the brand stopped
+saying; it stays in the record with what to say instead, because a page may still carry it.
+
+**Golden means a person approved it.** `decided.by` must be one of the record's `approvers`, and
+`decided.verbatim` is required with no substitute. This is the one place the kit's rule is made
+stricter: a kit item harvested from canon may cite a `source` in place of a verbatim, but canon
+that states a sentence is evidence that the sentence was used, never that someone approved it.
+
+**History is kept, always.** Every earlier wording stays in `history` with the date it was
+replaced and by whom. The record needs it to say what a line used to be, and a check needs it to
+FIND an out-of-date page: a surface carrying an earlier wording of a line is out of date, and it
+is found by searching for that wording, with nothing declared in the surface.
+
+**What `validate` refuses**, every defect at once: a record with no `approvers`; a line with no
+`name`, `for` or `text`; a `status` outside the three; an `audiences` list that is empty or names
+anything but `public`, `client`, `team`, `cofounder`; a golden or retired line with no `decided`,
+a `decided.by` who is not an approver, a date that is not `YYYY-MM-DD`, or no `verbatim`; a
+candidate that carries a `decided`; a `version` that is not a whole number of 1 or more, or a
+`history` that does not hold versions 1 to `version - 1` exactly once each; two consecutive
+versions with the same wording; a retired line with no `instead`, a null `instead` with no
+`insteadNote`, or an `instead` that names itself or anything but a golden line; a duplicate id;
+two live lines with the same wording.
+
+**Same wording** means equal after removing what is not wording: line breaks and runs of space,
+curly quotation marks, markdown emphasis marks, and the link around a linked word. Case is kept.
+
+**The verbs.** `abu lines <universe> [--status S] [--json]` lists. `abu line-add` records a
+candidate, or a golden line when it arrives with `--by` and `--verbatim`; the first one in a
+universe creates `canon/craft/brand-lines.json` and needs `--approver` once per person. A record is always a `.json` file directly inside `canon/craft`, because that is the only place `validate` reads; `--record` naming anything else is refused.
+`abu line-bless` makes a candidate golden. `abu line-reword` gives a line new words: a candidate
+is replaced, a golden line moves its old wording into `history`, goes up one version and takes
+the new yes. `abu line-retire` retires a line with `--instead <id>` or `--note`, one or the other. Each write is
+re-validated through a fresh store, and the previous bytes are restored when validation refuses or raises, so no verb leaves a record `validate` would reject. A record file that is not valid JSON is refused, never raised. The scaffolding skill is `add-or-update-line`.
+
+**What is not here yet.** A register of the surfaces a universe governs, the scan that finds a
+line on them, the generated map of which surface carries which line, and the check that fails
+on an out-of-date one are the next release. This section is the record they read.
+
+Earned 2026-10-13 on continental-works. Gary: "if you don't create the provenance chain between
+surfaces and the goldens, there's the opportunity for drift is just so natural, even for a
+two-person team that's evolving quickly."
 
 ## 12. Reference-matrix standard (v0.4)
 

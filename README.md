@@ -57,10 +57,10 @@ retired and why, and [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for how the layer
 <!-- BEGIN GENERATED: status -->
 |  | Value | Source |
 |---|---|---|
-| Spec | v0.60 | `SPEC.md`, dated 2026-10-06 |
-| Engine conforms to | v0.60 | `engine/agenticstory/__init__.py` |
+| Spec | v0.61 | `SPEC.md`, dated 2026-10-13 |
+| Engine conforms to | v0.61 | `engine/agenticstory/__init__.py` |
 | Engine version | v0.0.1 | `engine/agenticstory/__init__.py` |
-| Skills | 40 | `skills/*/SKILL.md` |
+| Skills | 41 | `skills/*/SKILL.md` |
 | CLI verbs | 32 | `abu --help` |
 | Agents | 1 | `agents/*.md` |
 | Commands | 1 | `commands/*.md` |

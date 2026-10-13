@@ -33,6 +33,7 @@ or a set of page heroes without ever declaring canon.
 | `add-character` | Add ONE character to an Agentic Brand Universe: interview the source (a real person's story/wardrobe/sensitive-list, or a fictional design brief), reuse-first via casting sweep, then scaffold a typed `character` entity with the SPEC §12 reference-matrix slots (8 shots) and a ready-to-run generation prompt per shot. | yes |
 | `add-generator` | Add ONE deterministic generator to a universe (SPEC v0.13 §4.11) — code that DRAWS an asset instead of prompting for one. |  |
 | `add-motif` | Add ONE motif (a recurring visual element, gesture, or pattern that must render identically wherever it appears, not a one-off image) to an Agentic Brand Universe (interview what it is and its load-bearing detail, reuse-first via casting sweep, then scaffold a typed `motif` entity with SPEC §12's hero + detail reference slots and ready-to-run generation prompts). |  |
+| `add-or-update-line` | Record ONE golden line (one approved unit of a brand's language - a tagline, the one-sentence answer to "what is this", a positioning paragraph, a credential, a definition) into a universe's lines record (SPEC 13.2, craft-canon kind `lines`), or change one - bless a candidate, give a golden line new words while keeping every earlier wording, or retire it naming what to say instead - always with who said yes, when and in what words. |  |
 | `add-piece-or-no-go` | Record ONE brand PIECE (a reusable part of the brand with its exact recipe, or a pointer to the canon that already defines it - a selection state, a button, a thread of stripes, a section marker, a mark at a size) or ONE NO-GO (a thing the brand refuses, why, and the piece to use instead) into a universe's kit record (SPEC 13.1, craft-canon kind `kit`), with who decided it, when and in what words. |  |
 | `add-prop` | Add ONE prop (a discrete physical object a character holds, wears, or uses, that must render identically wherever it appears) to an Agentic Brand Universe (interview what it is and its load-bearing detail, reuse-first via casting sweep, then scaffold a typed `prop` entity with SPEC §12's hero + detail reference slots and ready-to-run generation prompts). |  |
 | `add-relation` | Record ONE typed relation between two ids in an Agentic Brand Universe's canon graph (`crossover-with`, `appears-in`, `derived-from`, `contradicts`, `supersedes`) as a `from`/`rel`/`to`/`story`/`note` record written to `canon/relations/`. |  |
@@ -93,7 +94,7 @@ answers questions about it, and refuses renders whose references do not exist on
 | `crossovers` | list the crossovers an entity appears in |
 | `elevation` | render an OBJECT's blueprint as a code-built 2D elevation sheet from a declarative spec (deterministic, no model, no cost) |
 | `import-asset` | bring an asset made OUTSIDE this universe INTO it, writing its provenance chain as a side effect of the copy |
-| `init` | scaffold a new universe (conforms to spec v0.60) |
+| `init` | scaffold a new universe (conforms to spec v0.61) |
 | `kit` | list the brand's pieces and no-gos (SPEC §13.1 kit records) |
 | `land` | merge a finished work branch home, or queue it if that is not safe yet |
 | `line-add` | add a golden line: a candidate, or golden when it arrives with --by and --verbatim |
@@ -174,6 +175,7 @@ Headlines only, parsed from `SPEC.md`. Read the spec for the full text of any en
 <!-- BEGIN GENERATED: spec-changelog -->
 | Version | What changed |
 |---|---|
+| v0.61 | the LINES: a universe holds its brand's approved language, with every > wording it has had. |
 | v0.60 | the KIT: a universe catalogs its brand's pieces and no-gos, and a gate > reads the no-gos. |
 | v0.59 | a universe declares the SURFACE ROLES a renderer outside it paints in. |
 | v0.58 | a PREFERRED TERM is a voice rule the gate enforces. |

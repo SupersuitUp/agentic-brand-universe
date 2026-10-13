@@ -47,6 +47,7 @@ would use at the moment you need it.
 | **check what still blocks a lock** | `shoot-references/scripts/shot_board.py status <pngs>` — exits non-zero while anything is unlockable and names why. |
 | **backfill prompts onto old plates** | `shoot-references/scripts/backfill_prompts.py` |
 | **judge a slot against its golden** | `judge-slot/scripts/judge.py` |
+| **record or change an approved sentence** (a tagline, the one-line answer to "what is this", a credential) | `abu line-add` / `line-bless` / `line-reword` / `line-retire` (engine verbs), listed by `abu lines <universe>`. Never hand-edit `canon/craft/brand-lines.json`: the verbs keep version and history true and roll back a write `validate` would refuse. |
 | **voice-check a manuscript before locking** | `voice-gate/scripts/voice_gate.py <universe> <manuscript.md>` — rules fetched from https://garysheng.com/voice.md; fails on unadjudicated findings, waivable with a written reason |
 | **find what a session hand-rolled** | `pave-the-path/scripts/detect_handroll.py [dir]` from ANY directory (default: the cwd); `--since <ref>` scans only the scripts a git diff touched, so a consuming repo (books platform, a site, a print export) can run it as a pre-commit or CI step |
 | **install the framework for someone** | `onboard/scripts/install.py` |
@@ -59,7 +60,8 @@ would use at the moment you need it.
 Engine verbs (`python3 -m agenticstory.cli <verb>` from `engine/`):
 `validate` · `list` · `list-craft` · `assert-story` · `assert-spread` · `lock-level` ·
 `wardrobe` · `lock-shot` · `archive` · `import-asset` · `add-entity` · `add-look` · `build-canon` ·
-`build-docs` · `backfill-provenance` · `massing` · `elevation` · `land` · `init`
+`build-docs` · `backfill-provenance` · `massing` · `elevation` · `land` · `init` ·
+`lines` · `line-add` · `line-bless` · `line-reword` · `line-retire`
 
 ## Rendering a named person: ALWAYS use the look binding
 
