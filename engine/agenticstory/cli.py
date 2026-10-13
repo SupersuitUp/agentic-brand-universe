@@ -81,7 +81,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--by", required=yes_required, help="the person whose yes this is (one of the record's approvers)")
         p.add_argument("--verbatim", required=yes_required, help="their words")
         p.add_argument("--on", help="the date of the yes, YYYY-MM-DD (default: today)")
-        p.add_argument("--record", default=None, help="the record file inside the universe (default: canon/craft/brand-lines.json)")
+        p.add_argument("--record", default=None, help="which EXISTING lines record to change, when the universe has more than one "
+                            "(a verb creates only the first, at canon/craft/brand-lines.json)")
         return p
     la = _line_parser("line-add", "add a golden line: a candidate, or golden when it arrives with --by and --verbatim",
                       with_id=False, yes_required=False)
@@ -90,13 +91,14 @@ def build_parser() -> argparse.ArgumentParser:
     la.add_argument("--text", required=True)
     la.add_argument("--audience", required=True, help="comma-separated: public, client, team, cofounder")
     la.add_argument("--approver", action="append", default=[],
-                    help="only when the universe has no lines record yet: who can make a line golden (repeatable)")
+                    help="only when the universe has no lines record yet: who can make a line golden (repeatable). "
+                         "Refused once a record exists")
     _line_parser("line-bless", "a person's yes makes a candidate line golden")
     lw = _line_parser("line-reword", "give a line new words; a golden line keeps its old wording and goes up a version",
                       yes_required=False)
     lw.add_argument("--text", required=True)
-    lr = _line_parser("line-retire", "retire a line, naming the golden line to say instead")
-    lr.add_argument("--instead", help="the id of the golden line to use instead")
+    lr = _line_parser("line-retire", "retire a line, naming the line to say instead")
+    lr.add_argument("--instead", help="the id of the line to use instead (golden, or retired with an instead of its own)")
     lr.add_argument("--note", help="why nothing replaces it, when there is no --instead")
     c = sub.add_parser("crossovers", help="list the crossovers an entity appears in")
     c.add_argument("universe"); c.add_argument("entity")
@@ -534,23 +536,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if any(r.outcome in ("conflict", "error") for r in results) else 0
 
     if args.cmd in ("line-add", "line-bless", "line-reword", "line-retire"):
-        import datetime
         from . import lines as _lines
         # Built here, before the shared CanonStore load below, so a broken record file is a
         # REFUSED from the writer rather than a traceback from the store; other verbs are unchanged.
         root = Path(args.universe).resolve()
         if not (root / "universe.json").is_file():
             print(f"REFUSED: no universe.json in {root}"); return 1
-        decided = None
-        if args.by or args.verbatim:
-            if not (args.by and args.verbatim):
-                print("REFUSED: a yes is --by AND --verbatim: who said it, and their words"); return 1
-            decided = {"by": args.by, "on": args.on or datetime.date.today().isoformat(), "verbatim": args.verbatim}
         try:
-            path, rec = _lines.load(root, args.record or _lines.DEFAULT_FILE)
+            decided = _lines.yes(args.by, args.verbatim, args.on)
+            # ONE place decides which record a verb changes: the universe's own, never a second.
+            path, rec = _lines.select(root, args.record, getattr(args, "approver", None))
             if args.cmd == "line-add":
                 if rec is None:
-                    rec = _lines.new_record(args.approver)
+                    rec = _lines.new_record(args.approver, id=path.stem)
                 line = _lines.add(rec, id=args.id, name=args.name, purpose=args.purpose, text=args.text,
                                   audiences=[a.strip() for a in args.audience.split(",") if a.strip()], decided=decided)
                 said = f"added {line['status']} line '{line['id']}'"
@@ -572,6 +570,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"REFUSED: {e}"); return 1
         try:
             problems = _lines.write(root, path, rec)
+        except _lines.LineError as e:  # the bytes never landed; the file is as it was
+            print(f"REFUSED: nothing was written: {e}"); return 1
         except Exception as e:  # write() has already restored the previous bytes
             print(f"REFUSED: nothing was written, because the universe would not load: {type(e).__name__}: {e}")
             return 1
@@ -608,21 +608,32 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {s.id:24s} spine={s.raw.get('spine')} features={len(s.features)} beats={len(s.beats)}")
         return 0
     if args.cmd == "lines":
-        from .lines import records
+        # A reader of a record a person may have edited by hand: it prints what is there and
+        # never raises on a wrong type. `validate` is what says the record is wrong.
+        from .lines import lines_of, names, records
         recs = records(store.craft)
         keep = lambda l: isinstance(l, dict) and (not args.status or l.get("status") == args.status)
+        # Two files with one id: this can only list the one the store kept, so it says which.
+        # On stderr for --json, whose stdout is the lines and nothing else.
+        shown = {r.get("id") for r in recs}
+        kept = {cid: again for cid, _, again in store.craft_collisions}  # the last file wins
+        for cid, first, again in store.craft_collisions:
+            if cid in shown:
+                print(f"NOTE: craft id '{cid}' is declared by both {first} and {again}; this listing shows "
+                      f"{kept[cid]}, and `abu validate` refuses the universe until one is removed",
+                      file=sys.stderr if args.json else sys.stdout)
         if args.json:
-            print(json.dumps([l for r in recs for l in (r.get("lines") or []) if keep(l)], indent=2))
+            print(json.dumps([l for r in recs for l in lines_of(r) if keep(l)], indent=2))
             return 0
         if not recs:
             print("no lines: this universe records no golden lines (SPEC §13.2)"); return 0
         for r in recs:
-            print(f"lines {r.get('id')}: {r.get('name', '')}  approvers: {', '.join(r.get('approvers') or [])}")
-            for l in (x for x in (r.get("lines") or []) if keep(x)):
+            print(f"lines {r.get('id')}: {r.get('name', '')}  approvers: {', '.join(names(r.get('approvers')))}")
+            for l in (x for x in lines_of(r) if keep(x)):
                 text = " ".join(str(l.get("text", "")).split())
                 text = text if len(text) <= 96 else text[:93] + "..."
                 print(f"  {str(l.get('status')):10} {str(l.get('id')):30} v{l.get('version')}  "
-                      f"[{', '.join(l.get('audiences') or [])}]  {text}")
+                      f"[{', '.join(names(l.get('audiences')))}]  {text}")
         return 0
     if args.cmd == "kit":
         from .kit import kits
