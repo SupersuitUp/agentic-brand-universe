@@ -452,6 +452,49 @@ def added_lines(paths: Iterable[str], rng: str) -> set[tuple[str, int]]:
     return out
 
 
+# `abu-allow: <reason>` in any comment syntax. The reason runs to the end of the comment; a closer
+# (`*/`, `-->`, `}}`, `*/}`) is not part of it.
+WAIVER = re.compile(r"abu-allow:[ \t]*(.*?)[ \t]*(?:\*/\}?|-->|\}\}|$)")
+COMMENT_ONLY = re.compile(r"^\s*(?://|/\*|\{/\*|<!--|#|\*|\{\{!--)")
+
+
+def apply_waivers(hits: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Split hits into (refused, waived). A line is waived by `abu-allow: <reason>` on that line or
+    the line directly above it, and only with a reason: a skip nobody can explain is how drift
+    comes back. A bare `abu-allow:` waives nothing and marks the hit `bareWaiver` so the output can
+    say why it still failed. Earned 2026-10-14: an iMessage simulator must keep the real iOS blue
+    the brand refuses as a brand colour, and a baseline cannot excuse code written after it."""
+    cache: dict[str, list[str]] = {}
+    refused, waived = [], []
+    for h in hits:
+        lines = cache.get(h["file"])
+        if lines is None:
+            try:
+                lines = Path(h["file"]).read_text(errors="replace").split("\n")
+            except OSError:
+                lines = []
+            cache[h["file"]] = lines
+        reason, bare = None, False
+        for n in (h["line"], h["line"] - 1):
+            if 1 <= n <= len(lines):
+                text = lines[n - 1]
+                # The line above counts only when it is a comment by itself: a waiver at the end of
+                # a line of code excuses that line, never the one under it.
+                if n != h["line"] and not COMMENT_ONLY.match(text):
+                    continue
+                m = WAIVER.search(text)
+                if m:
+                    if m.group(1).strip():
+                        reason = m.group(1).strip()
+                        break
+                    bare = True
+        if reason:
+            waived.append(dict(h, waiver=reason))
+        else:
+            refused.append(dict(h, bareWaiver=True) if bare else h)
+    return refused, waived
+
+
 def only_added(hits: list[dict], added: set[tuple[str, int]]) -> list[dict]:
     return [h for h in hits if (str(Path(h["file"]).resolve()), h["line"]) in added]
 

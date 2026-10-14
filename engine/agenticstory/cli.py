@@ -74,6 +74,15 @@ def build_parser() -> argparse.ArgumentParser:
     ck.add_argument("--no-palette", action="store_true", help="skip the off-palette colour check")
     ck.add_argument("--baseline", metavar="FILE", help="tolerate the findings recorded in FILE (paths relative to the cwd); refuse anything new")
     ck.add_argument("--write-baseline", metavar="FILE", help="record every current finding in FILE and exit 0")
+    ck.add_argument("--report", action="store_true", help="when something is refused, print a pre-filled GitHub issue carrying the findings and the rules they broke")
+    rp = sub.add_parser("report", help="file what ABU got wrong: prints (or --open opens) a pre-filled GitHub issue; nothing is sent until you press submit")
+    rp.add_argument("what", help="what happened, in a sentence")
+    rp.add_argument("--expected", default="", help="what it should have done, and why")
+    rp.add_argument("--command", default="", help="the command you ran, or what you asked the agent")
+    rp.add_argument("--skill", default="", help="the ABU skill involved, e.g. abu:shoot-references")
+    rp.add_argument("--details", default="", help="anything else: output, the file it was about")
+    rp.add_argument("--title", default="", help="issue title (default: the first line of WHAT)")
+    rp.add_argument("--open", action="store_true", help="open the issue page in the browser")
     ln = sub.add_parser("lines", help="list the brand's golden lines (SPEC §13.2 lines records)")
     ln.add_argument("universe"); ln.add_argument("--json", action="store_true")
     ln.add_argument("--status", choices=["candidate", "golden", "retired"])
@@ -283,6 +292,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
+
+    if args.cmd == "report":
+        from .report import body, issue_url
+        url = issue_url(args.title or args.what.strip().split("\n")[0],
+                        body(args.what, args.expected, args.command, args.skill, args.details))
+        print("Open this to file it. Nothing is sent until you press submit, so read it first:")
+        print(url)
+        if args.open:
+            import webbrowser
+            webbrowser.open(url)
+        return 0
 
     if args.cmd == "massing-scaffold":
         from . import massing as _massing
@@ -655,7 +675,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  no-go  {n.get('id'):34} instead: {n.get('instead') or '-'}")
         return 0
     if args.cmd == "check-kit":
-        from .kit import nogos, pieces_by_id, scan, palette, off_palette, added_lines, only_added, write_baseline, beyond_baseline
+        from .kit import nogos, pieces_by_id, scan, palette, off_palette, added_lines, only_added, write_baseline, beyond_baseline, apply_waivers
         allowed = None if args.no_palette else palette(Path(args.universe), store.craft)
         if not any(n.get("detect") for n in nogos(store.craft)) and allowed is None:
             print("check-kit: no no-go in this universe declares a detect pattern and no kit names a tokensFrom, so nothing can be checked")
@@ -663,6 +683,7 @@ def main(argv: list[str] | None = None) -> int:
         hits = scan(store.craft, args.paths)
         if allowed is not None:
             hits += off_palette(allowed, args.paths)
+        hits, waived = apply_waivers(hits)
         if args.added:
             try:
                 hits = only_added(hits, added_lines(args.paths, args.added))
@@ -686,10 +707,27 @@ def main(argv: list[str] | None = None) -> int:
         for h in hits:
             if h["nogo"] == "off-palette":
                 print(f"{h['file']}:{h['line']}  OFF-PALETTE {h['value']}  -> use a token from the kit's tokensFrom, or add the colour to canon first\n    {h['excerpt']}")
-                continue
-            inst = pieces.get(h["instead"] or "", {}).get("name") or h["instead"] or "(see the no-go)"
-            print(f"{h['file']}:{h['line']}  NO-GO {h['nogo']}  -> use {inst}\n    {h['excerpt']}")
-        print(f"check-kit: {len(hits)} no-go use(s)" if hits else "check-kit: clean")
+            else:
+                inst = pieces.get(h["instead"] or "", {}).get("name") or h["instead"] or "(see the no-go)"
+                print(f"{h['file']}:{h['line']}  NO-GO {h['nogo']}  -> use {inst}\n    {h['excerpt']}")
+            if h.get("bareWaiver"):
+                print("    abu-allow needs a reason after the colon; a skip nobody can explain waives nothing")
+        tail = f", {len(waived)} waived" if waived else ""
+        print(f"check-kit: {len(hits)} no-go use(s){tail}" if hits else f"check-kit: clean{tail}")
+        if hits:
+            print("  Intentional (a mockup of another product's UI, say)? Add `abu-allow: <why>` on the line or the line above.")
+            print("  Check wrong? `abu check-kit ... --report` files it with the findings attached, or `abu report \"<what>\"`.")
+            if args.report:
+                from .report import body, check_kit_details, issue_url
+                by_id = {n.get("id"): n for n in nogos(store.craft)}
+                first = hits[0]
+                title = f"check-kit: {first['nogo']} {first.get('value') or ''} refused in {Path(first['file']).name}".strip()
+                text = body(f"`abu check-kit` refused {len(hits)} finding(s) I believe are wrong.",
+                            command="abu " + " ".join(argv if argv is not None else sys.argv[1:]),
+                            skill="check-kit",
+                            details=check_kit_details(hits, by_id, pieces))
+                print("\nOpen this to file it (nothing is sent until you press submit):")
+                print(issue_url(title, text))
         return 1 if hits else 0
     if args.cmd == "list-craft":
         for c in sorted(store.craft.values(), key=lambda c: (c.kind, c.id)):

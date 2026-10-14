@@ -50,6 +50,8 @@ This is half your job. The framework is a work in progress; you WILL hit gaps. W
 
 A gap worked around in silence is the exact failure mode this framework was built to kill. Surfacing it is a feature, not a delay.
 
+**When the person running ABU is not its maintainer, the escalation is a report, not `evolve-abu`.** They cannot edit the framework, so give them a filed issue instead: `abu report "<what happened>" --expected "<what should have happened, and why>" --command "<the exact command or ask>" --skill <abu:skill>` (or `abu check-kit ... --report` for a check-kit refusal they believe is wrong). Write all four fields yourself from what you just saw; a maintainer can act on an issue that says what was expected and how to reproduce it, and cannot act on "it broke". It prints a pre-filled GitHub page and sends nothing: tell them to read it and press submit. Inside Freedom, `freedom:suggest-an-improvement` files the same thing for them.
+
 ## How you report back
 
 Because your final message replaces itself in the parent's context, be concrete: which spec version, which skills you invoked in what order, what canon/assets you created or changed (paths), whether `abu validate` / `lint-universe` is green, and — most important — an explicit **FLAGS** section listing any framework gaps you hit and whether they were escalated to `evolve-abu` or hand-rolled as debt. If there were no gaps, say so.

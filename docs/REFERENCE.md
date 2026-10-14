@@ -109,6 +109,7 @@ answers questions about it, and refuses renders whose references do not exist on
 | `massing` | render a setting's blueprint as a code-built 3D massing sheet from a declarative spec (deterministic, no model, no cost) |
 | `massing-scaffold` | write a STARTER massing spec for a rectangular room (shell + opposed cameras + notes stub) to edit, so authoring a blueprint does not start from a blank file |
 | `relations` | list an entity's typed relations |
+| `report` | file what ABU got wrong: prints (or --open opens) a pre-filled GitHub issue; nothing is sent until you press submit |
 | `unarchive` | put a retired entity back in service |
 | `validate` | typecheck a universe against the spec schema |
 | `wardrobe` | resolve what named characters are WEARING: which lookbooks apply, their aesthetic, variety rules, negatives and gate |

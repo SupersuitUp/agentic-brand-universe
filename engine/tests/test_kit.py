@@ -274,6 +274,71 @@ class KitTest(unittest.TestCase):
         self.assertIn("piece  selection-ring", out.getvalue())
         self.assertIn("no-go  edge-stripe-on-selection", out.getvalue())
 
+    # ---- waivers (v1.45): a reasoned `abu-allow:` lets one line through, and is counted ----
+    # Earned 2026-10-14: an iMessage simulator on continentalworks.ai must keep the real iOS blue,
+    # which the brand refuses as a BRAND colour. Gary: "people should be able to skip the
+    # warnings ... and then be able to quickly file a bug".
+    def _check(self, *extra, files):
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        site = self.dir / "w"; site.mkdir(exist_ok=True)
+        for name, text in files.items():
+            (site / name).write_text(text)
+        with redirect_stdout(io.StringIO()) as out:
+            code = main(["check-kit", str(self.dir), str(site), *extra])
+        return code, out.getvalue()
+
+    def test_a_reasoned_waiver_on_the_line_lets_it_through_and_is_counted(self):
+        code, got = self._check(files={"sim.css": ".bubble{background:#007AFF} /* abu-allow: iOS Messages mockup */\n"})
+        self.assertEqual(code, 0, got)
+        self.assertIn("clean, 1 waived", got, "a skip is never silent")
+
+    def test_a_waiver_on_the_line_above_covers_the_next_line_only(self):
+        code, got = self._check(files={"sim.tsx": "// abu-allow: iOS Messages mockup\nconst blue = '#007AFF';\nconst also = '#123456';\n"})
+        self.assertEqual(code, 1)
+        self.assertIn("OFF-PALETTE #123456", got)
+        self.assertNotIn("#007AFF", got)
+        self.assertIn("1 waived", got)
+
+    def test_a_waiver_with_no_reason_waives_nothing_and_says_why(self):
+        code, got = self._check(files={"sim.css": ".bubble{background:#007AFF} /* abu-allow: */\n"})
+        self.assertEqual(code, 1)
+        self.assertIn("OFF-PALETTE #007AFF", got)
+        self.assertIn("abu-allow needs a reason", got)
+
+    def test_every_refusal_says_how_to_skip_it_or_report_it(self):
+        code, got = self._check(files={"bad.css": ".x{color:#123456}\n"})
+        self.assertEqual(code, 1)
+        self.assertIn("abu-allow: <why>", got)
+        self.assertIn("abu report", got)
+
+    def test_a_waived_line_never_enters_a_baseline(self):
+        import os
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        site = self.dir / "wb"; site.mkdir()
+        (site / "a.css").write_text(".x{color:#007AFF} /* abu-allow: mockup */\n.y{color:#abcdef}\n")
+        here = os.getcwd(); os.chdir(site)
+        try:
+            with redirect_stdout(io.StringIO()):
+                main(["check-kit", str(self.dir), "a.css", "--write-baseline", "base.json"])
+            rows = json.loads((site / "base.json").read_text())["findings"]
+        finally:
+            os.chdir(here)
+        self.assertEqual([r["value"] for r in rows], ["#ABCDEF"])
+
+    def test_check_kit_report_carries_the_findings_and_the_rule(self):
+        from urllib.parse import urlparse, parse_qs
+        code, got = self._check("--report", files={"reader.css": READER_CSS, "bad.css": ".x{color:#123456}\n"})
+        self.assertEqual(code, 1)
+        url = [l for l in got.split("\n") if l.startswith("https://github.com/")][0]
+        q = parse_qs(urlparse(url).query)
+        body = q["body"][0]
+        self.assertTrue(urlparse(url).path.endswith("/issues/new"))
+        self.assertIn("check-kit", q["title"][0])
+        for want in ("edge-stripe-on-selection", "it reads as a tab, not a choice", "I really don't like it",
+                     "The selection ring", "reader.css:1", "OFF-PALETTE #123456", "bad.css:1",
+                     "What I expected", "ABU version", "Python", "check-kit"):
+            self.assertIn(want, body, f"the issue must carry {want!r}")
+
 
 if __name__ == "__main__":
     unittest.main()

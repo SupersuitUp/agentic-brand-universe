@@ -3016,6 +3016,25 @@ line's text rather than its number, so moving code never trips it; `--baseline <
 only findings the file does not account for, counting duplicates. Commit the file in the surface;
 fixing a finding means deleting its row. A missing or unreadable baseline is exit 2.
 
+**`abu-allow: <reason>` waives one line, and only with a reason (engine 1.45.0).** Written in any
+comment syntax at the end of the line, or as a comment by itself on the line directly above, it
+lets that line's findings through. A waiver at the end of a line of code never excuses the line
+under it. A bare `abu-allow:` waives nothing and the refusal says so, because a skip nobody can
+explain is how drift comes back. Waived lines are counted in the summary (`clean, 3 waived`) and
+never written into a baseline. The case it exists for is a faithful mockup of another product's
+interface: an iMessage simulator keeps the real iOS blue, which the brand refuses as a BRAND
+colour. A baseline cannot cover that, since it excuses only code that existed when it was written.
+
+**Every refusal says how to skip it and how to report it.** `--report` adds a pre-filled GitHub issue
+for this repo carrying each finding with the rule it broke (what the no-go refuses, why, the piece
+to use instead, who decided it and in what words), the exact command, and the ABU, Python and OS
+versions, with a heading for what the reporter expected. `abu report "<what happened>" [--expected
+...] [--command ...] [--skill ...] [--open]` does the same for anything ABU gets wrong. Neither
+sends anything: the reporter reads the page and presses submit, which keeps them in charge of a
+body that quotes their own code. Earned 2026-10-14, Gary: "people should be able to skip the
+warnings, etc., and then be able to quickly file a bug to the repo", and "it is very very important
+that really good context gets put into the issues".
+
 `abu kit <universe> [--json]` lists the pieces and no-gos. The scaffolding verb is the
 `add-piece-or-no-go` skill.
 
