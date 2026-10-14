@@ -1,3 +1,21 @@
+## 2026-10-14: the landing page is an open standard from Continental Works; check-kit palette fix (unreleased)
+
+`site/index.html` is now direction C of three scratch directions Gary picked by phone (A The
+Standard, B Brand as code, C Continental Works house): Ascent tokens, "Your brand, as code.",
+the two doors (plugin for agents, `@supersuit/abu` for any repo or build), and check-kit as the
+build gate every CW surface runs. The page passes `abu check-kit` against the CW kit. Do not
+hand-type the engine version on the page: `docsfile.check()` allows only the spec version, and an
+engine number goes stale every release; the page links npm instead. og.html/og.jpg redrawn.
+Scratch directions are deployed by `vercel deploy --prod` from a worktree to unlisted
+`/scratch/` paths, because preview URLs sit behind Vercel SSO and cannot open on a phone.
+
+check-kit palette (commit 20c3f32, NOT YET RELEASED): the palette was every hex anywhere in the
+tokensFrom file, so a colour the canon's prose REFUSES (`#007AFF`) passed. Now only colour values
+count (a `hex` key, or a bare-hex string). Releasing it can turn CW site builds red where they
+use a retired token (`#DB371F`, `#C22D55`, `#D63219`, `#F0ECE5`), since their baselines never
+recorded those as hits: sweep freedom-site, freedom-artifacts and getfreedom-wiki with the new
+engine before tagging.
+
 ## 2026-08-28 — the backup fix had the same bug it fixed (plugin 1.15.1)
 
 1.15.0 cleared the old `<out>.prev` before checking whether a live file existed to replace it.
