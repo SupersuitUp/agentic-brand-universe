@@ -29,8 +29,9 @@ And `scan`: run every no-go's `detect` patterns over a surface's SOURCE files, w
 no-go becomes a refusal rather than a remembered preference (`abu check-kit`).
 
 And `off_palette` (2026-10-14): every colour literal in a surface's source that the
-universe's token file does not hold. The palette is every hex written anywhere in the file a kit's
-`tokensFrom` names (the tokens and whatever the record derives from them) plus white, so a new
+universe's token file does not hold. The palette is every colour VALUE in the file a kit's
+`tokensFrom` names (the tokens and whatever the record derives from them, never a hex quoted in
+prose, which is usually a colour the record refuses) plus white, so a new
 colour is a decision made in canon first, never typed into a surface. And `added_lines`, which lets
 a gate judge only what a change ADDS, so a surface carrying old debt can still ship clean work:
 Gary, 2026-10-14, "The cw plugin should have a guard for pushing any cw surface without consulting
@@ -345,8 +346,41 @@ def norm_hex(h: str) -> str:
     return "#" + h[:6].upper()
 
 
+BARE_HEX = re.compile(r"^\s*#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\s*$")
+
+
+def colour_values(node: Any) -> set[str]:
+    """Every colour VALUE in a parsed record: a string under a `hex` key, or a string that is
+    nothing but a hex. Never a hex quoted inside prose.
+
+    A record's prose names colours in order to REFUSE them ("never the system blue #007AFF")
+    or to remember what a token used to be ("tomato #DB371F until 2026-10-12"). Reading every
+    hex in the file put those on the palette, so the colour the brand refused passed the gate
+    (Continental Works, 2026-10-14)."""
+    out: set[str] = set()
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "hex" and isinstance(v, str):
+                m = HEX.search(v)
+                if m and BARE_HEX.match(v):
+                    out.add(norm_hex(m.group(0)))
+            else:
+                out |= colour_values(v)
+    elif isinstance(node, list):
+        for v in node:
+            out |= colour_values(v)
+    elif isinstance(node, str) and BARE_HEX.match(node):
+        out.add(norm_hex(node.strip()))
+    return out
+
+
 def palette(root: Path, craft: dict) -> set[str] | None:
-    """Every colour the universe declares: each hex in each kit's `tokensFrom` FILE, plus white.
+    """Every colour the universe declares: each colour VALUE in each kit's `tokensFrom` file
+    (its tokens, and whatever the record derives from them as a `hex`), plus white.
+
+    The whole file, not only the `#fragment`: a record declares derived colours beside its
+    tokens (the Ascent's `surfaces.frapp.derived`, each with the mix that produces it), and those
+    are decisions made in canon. What never counts is a hex written inside a sentence.
 
     None when no kit names a `tokensFrom`, which means the universe has not said what its colours
     are and there is nothing to hold a surface to."""
@@ -356,10 +390,9 @@ def palette(root: Path, craft: dict) -> set[str] | None:
     out = set(ALWAYS)
     for f in files:
         try:
-            text = (root / f).read_text(errors="replace")
-        except OSError:
+            out |= colour_values(json.loads((root / f).read_text(errors="replace")))
+        except (OSError, ValueError):
             continue
-        out |= {norm_hex(m.group(0)) for m in HEX.finditer(text)}
     return out
 
 

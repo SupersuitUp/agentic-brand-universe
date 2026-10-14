@@ -2995,8 +2995,11 @@ the places still on a superseded rule.
 **The palette is part of the gate (2026-10-14).** When a kit names a `tokensFrom`, `check-kit`
 also refuses every colour literal in a surface's source that the token FILE does not hold: a hex,
 an `rgb()`/`rgba()` (alpha ignored, and found inside a Tailwind arbitrary value too), or a Tailwind
-palette class such as `ring-black/5` or `text-red-500`. The palette is every hex written anywhere in
-that file, so a value the record derives from a token passes, plus white. A new colour is decided in
+palette class such as `ring-black/5` or `text-red-500`. The palette is every colour VALUE in that
+file (a string under a `hex` key, or a string that is nothing but a hex), so a value the record
+derives from a token passes, plus white. A hex quoted inside prose never counts: a record names
+colours in sentences to refuse them ("never the system blue #007AFF") or to remember a superseded
+value, and until 2026-10-14 those sentences put the refused colour on the palette. A new colour is decided in
 canon first, never typed into a surface. `--no-palette` skips it. The exit-2 case is now "no no-go
 declares a detector AND no kit names a `tokensFrom`".
 

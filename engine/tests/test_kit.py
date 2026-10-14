@@ -191,6 +191,30 @@ class KitTest(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             self.assertEqual(main(["check-kit", str(self.dir), str(site), "--no-palette"]), 0)
 
+    def test_a_colour_named_in_prose_is_not_on_the_palette(self):
+        """Regression, 2026-10-14: the Continental Works record's prose names #007AFF as a colour
+        it REFUSES, and the palette used to take every hex written anywhere in the file, so the
+        refused colour passed. Only colour VALUES count: a token's `hex`, a derived `hex`, or a
+        string that is nothing but a hex."""
+        rec = dict(ASCENT)
+        rec["rules"] = ASCENT["rules"] + ["Never the system blue #007AFF, the derived greys, or the old cream #F0ECE5."]
+        rec["tokens"] = dict(ASCENT["tokens"], teal={"hex": "#105971", "role": "stripe 1; was #0F5A70 until a week ago"})
+        rec["surfaces"] = dict(ASCENT["surfaces"], frapp=dict(ASCENT["surfaces"]["frapp"],
+                               derived={"paper": {"hex": "#FBF5E7", "mix": ["cream", "white", 0.42]}}))
+        rec["accent"] = "#AABBCC"
+        self.write_ascent(rec)
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        site = self.dir / "pal"; site.mkdir()
+        (site / "bad.css").write_text(".btn{background:#007AFF}\n.c{color:#F0ECE5}\n.d{color:#0F5A70}\n")
+        (site / "ok.css").write_text(".a{color:#105971;background:#fff}\n.b{color:#FBF5E7}\n.e{color:#aabbcc}\n.f{color:#E9A23B}\n")
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(main(["check-kit", str(self.dir), str(site)]), 1)
+        got = out.getvalue()
+        self.assertIn("OFF-PALETTE #007AFF", got, "a colour the record names in prose to refuse it is refused")
+        self.assertIn("OFF-PALETTE #F0ECE5", got)
+        self.assertIn("OFF-PALETTE #0F5A70", got, "a superseded value quoted in a token's role is not a token")
+        self.assertNotIn("ok.css", got, "token hexes, a derived hex, a bare hex value and white still pass")
+
     def _git(self, repo, *a):
         import subprocess
         subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
