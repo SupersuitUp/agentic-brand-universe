@@ -1,3 +1,13 @@
+## 2026-10-14: skip a check with a reason, report what ABU got wrong (1.45.0)
+
+`abu-allow: <reason>` waives one check-kit line (end of line, or a comment-only line above; a
+waiver at the end of a code line never spills to the next, which the first cut got wrong and the
+baseline test caught). `abu report` and `check-kit --report` print a pre-filled GitHub issue with
+the findings, the rule each broke (refuses, why, instead, decided verbatim), the command and the
+versions; nothing is sent until the reporter submits. The front door and steward offer it after a
+misfire and fill every field themselves. Gary's bar: "really good context gets put into the
+issues". Next candidate: the same report step in every ABU skill's ending, not just the front door.
+
 ## 2026-10-14: the landing page is an open standard from Continental Works; check-kit palette fix (1.44.1)
 
 `site/index.html` is now direction C of three scratch directions Gary picked by phone (A The
