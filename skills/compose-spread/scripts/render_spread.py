@@ -58,7 +58,7 @@ def _abu_root(start=None):
     raise SystemExit(
         "abu: cannot locate the ABU root from " + str(p) + ".\n"
         "  Looked upward for engine/agenticstory. If ABU was installed as a plugin,\n"
-        "  reinstall it: /plugin marketplace add garysheng/agentic-brand-universe")
+        "  reinstall it: /plugin marketplace add SupersuitUp/agentic-brand-universe")
 
 
 def _provider_script(provider="gpt-image-2"):

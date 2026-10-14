@@ -44,6 +44,13 @@ DECLARED="$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.
          earned the release, not here: the version belongs to the change rather than to the
          act of publishing it."
 
+# The npm package (@supersuit/abu) IS the engine at this version: the tag this release pushes also
+# publishes it (.github/workflows/publish.yml), and that workflow refuses a tag package.json disagrees with.
+NPMV="$(python3 -c "import json;print(json.load(open('package.json'))['version'])")"
+[ "$NPMV" = "$VERSION" ] \
+  || die "package.json declares $NPMV, you asked for $VERSION. Bump it with plugin.json:
+         npm version $VERSION --no-git-tag-version (it keeps package-lock.json in step)."
+
 grep -q "v$VERSION" SAVE-LOG.md \
   || die "SAVE-LOG.md has no line for v$VERSION. One line, under 80 words, is the changelog
           every future reader gets."

@@ -10,7 +10,7 @@
 # Two marketplaces advertising one plugin meant two sources of truth, and the
 # copy was always the staler one. Installing is now:
 #
-#   /plugin marketplace add garysheng/agentic-brand-universe
+#   /plugin marketplace add SupersuitUp/agentic-brand-universe
 #   /plugin install abu@agentic-brand-universe
 #
 # Shipping a change is: commit, push, bump `version` in

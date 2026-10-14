@@ -1,0 +1,16 @@
+{
+  "name": "@supersuit/abu",
+  "version": "1.43.0",
+  "description": "Agentic Brand Universe: a brand as typed, version-controlled canon. The `abu` command validates a universe and gates a surface against it (check-kit: no-gos and the palette).",
+  "license": "MIT",
+  "author": "Gary Sheng",
+  "type": "module",
+  "bin": { "abu": "bin/abu.mjs" },
+  "files": ["bin/", "engine/agenticstory/", "registry/", "providers/", "SPEC.md", "CHANGELOG.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "repository": { "type": "git", "url": "git+https://github.com/SupersuitUp/agentic-brand-universe.git" },
+  "homepage": "https://agenticbranduniverse.com",
+  "keywords": ["brand", "design-system", "agents", "canon", "abu"],
+  "scripts": { "test": "node --test npm/smoke.test.mjs" },
+  "publishConfig": { "access": "public" }
+}

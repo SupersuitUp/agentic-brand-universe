@@ -25,4 +25,4 @@ SPEC_WIKI = "https://agenticbranduniverse.com"
 # replacement agenticbranduniverse.com/spec 404s. A citation that does not resolve is
 # the same defect as a recipe pointing at a file that is not there, so this points at
 # the spec document itself, which is verifiably served.
-SPEC_URL = "https://github.com/garysheng/agentic-brand-universe/blob/master/SPEC.md"
+SPEC_URL = "https://github.com/SupersuitUp/agentic-brand-universe/blob/master/SPEC.md"

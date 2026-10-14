@@ -1,0 +1,158 @@
+# Publish @supersuit/abu to npm through OIDC trusted publishing.
+#
+# WHY THIS EXISTS. Publishing @supersuit/abu by hand needs a one-time password in a browser
+# on every release, which puts a human round trip in front of every fix reaching the people
+# who install it. This workflow lets a version tag publish it with no human step and no
+# stored token.
+#
+# It is also the direction npm is forcing. Their own banner: "npm tokens that bypass 2FA
+# are being restricted, account changes (Aug 2026) and direct publishing (Jan 2027)."
+#
+# Stamped by the publish-npm-package skill from the workflow every @supersuit package ships
+# through, where every comment below was earned. Add an install and build step above
+# `npm test` if this package has dependencies or a build.
+# A long-lived automation token in a secret would work today and stop working on a date
+# somebody else picked.
+#
+# HOW THE TRUST WORKS. There is no token here and no NODE_AUTH_TOKEN, deliberately.
+# GitHub mints a short-lived OIDC identity for this workflow, npm verifies it against the
+# trusted publisher configured on the package, and the publish is authorised by WHO ran it
+# rather than by a secret anyone holding it could use. The trusted-publisher record on npm
+# names this repository AND this filename, so renaming this file breaks publishing until
+# the record is updated. That is the intended behaviour rather than a trap.
+#
+# HOW TO RELEASE. Bump the version in package.json, add the CHANGELOG entry, commit, then:
+#     git tag v0.1.0 && git push origin v0.1.0
+# The tag is the trigger. The version guard below refuses a tag that disagrees with
+# package.json, because a mismatch publishes a version nobody wrote a changelog for.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every check and stop before publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # The one permission OIDC needs. Without it the publish fails with an auth error that
+  # does not mention OIDC at all.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # npm checks the environment claim inside the OIDC token, so a record that NAMES an
+    # environment the job does not declare fails as ENEEDAUTH, with nothing said about
+    # environments. This package's record names none: it is created with
+    #     npm trust github @supersuit/abu --file publish.yml \
+    #       --repo SupersuitUp/agentic-brand-universe --allow-publish --allow-stage-publish
+    # and `npm trust list @supersuit/abu` shows no environment, so any value here
+    # passes. `blank` is kept to match docusaurus-preset-wiki, whose record also names none
+    # and which has published every release through this exact shape. If a record is ever
+    # given an environment, this line must change to match it in the same sitting.
+    #
+    # The FIRST publish of a new package cannot go through this workflow: npm attaches a
+    # trusted publisher to an existing package, so the first version is published by hand (web 2FA)
+    # and the record created right after. Every release since is a tag push.
+    environment: blank
+    steps:
+      - uses: actions/checkout@v5
+
+      # NO `registry-url` HERE, AND THAT IS THE WHOLE TRICK.
+      #
+      # Every published example of this workflow sets `registry-url: https://registry.npmjs.org`,
+      # and with OIDC it is the thing that breaks the publish. setup-node responds to that
+      # option by writing an .npmrc containing
+      #     //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+      # and exporting NODE_AUTH_TOKEN as a placeholder. npm finds a credential already
+      # configured, so it never attempts the OIDC exchange, sends the placeholder instead, and
+      # the registry rejects it.
+      #
+      # The rejection is a 404 rather than a 401, because npm answers an unauthenticated PUT
+      # with "not found" so that private package names cannot be probed. So the failure reads
+      # as "the package does not exist" for a package that plainly does, and says nothing
+      # about auth at all. Cost one release on 2026-09-15 (run 34978380965).
+      #
+      # Omitting it leaves npm with no configured credential, which is the state that makes it
+      # perform the OIDC exchange. The default registry is already registry.npmjs.org.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # PINNED TO 11.x, NOT `npm@latest`.
+      #
+      # OIDC trusted publishing landed in npm 11.5.1. Writing `npm@latest` here picked up
+      # npm 12.0.2 on 2026-09-15, which did not perform the exchange at all: it went straight
+      # to ENEEDAUTH, "you need to authorize this machine using npm login", as though trusted
+      # publishing did not exist. Reaching for the newest npm to be safe is what broke it.
+      #
+      # Raise this deliberately, after checking that the new major still does the exchange,
+      # rather than by floating it.
+      - name: Pin npm to a version that performs the OIDC exchange
+        run: |
+          npm install -g npm@11
+          npm --version
+
+      # The exchange needs these two, injected by GitHub only when `id-token: write` is set
+      # above. Asserting them here turns a silent auth failure at the end of a five-minute
+      # run into an immediate, named one.
+      - name: Assert the OIDC identity is available
+        run: |
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "No OIDC identity available to this job."
+            # Single quotes: inside double quotes bash would run the backticks as a command.
+            echo 'The workflow needs `permissions: id-token: write`, and a fork PR never gets one.'
+            exit 1
+          fi
+          echo "OIDC identity present"
+
+      # Zero runtime dependencies and no lockfile, so there is nothing to install. The
+      # package is the product, so it is tested before it is published, never after.
+      - run: npm test
+
+      - name: Refuse a tag that disagrees with package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag v$TAG does not match package.json $PKG"
+            echo "Publishing here would ship a version with no CHANGELOG entry."
+            exit 1
+          fi
+          echo "tag and package.json agree on $PKG"
+
+      - name: Refuse a version already on npm
+        run: |
+          PKG="$(node -p "require('./package.json').version")"
+          if npm view "@supersuit/abu@$PKG" version >/dev/null 2>&1; then
+            echo "$PKG is already published. Bump the version."
+            exit 1
+          fi
+          echo "$PKG is not on npm yet"
+
+      - name: Publish
+        if: github.event_name == 'push' || inputs.dry_run == false
+        # No NODE_AUTH_TOKEN and no .npmrc auth line, which is enforced by the absence of
+        # `registry-url` above rather than by anything here. The OIDC identity is the entire
+        # credential; ANY configured token takes precedence over it and puts the 2FA prompt
+        # back, or fails as an unexplained 404.
+        #
+        # The assertion below is cheap and catches the regression directly, because the
+        # symptom is otherwise indistinguishable from a missing package.
+        run: |
+          if [ -n "${NODE_AUTH_TOKEN:-}" ] || grep -qs "_authToken" "${NPM_CONFIG_USERCONFIG:-/dev/null}"; then
+            echo "A credential is configured, so npm will not attempt the OIDC exchange."
+            echo "Check that setup-node above does not set registry-url."
+            exit 1
+          fi
+          npm publish
+
+      - name: Dry run only
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: echo "All checks passed. Nothing published (dry run)."

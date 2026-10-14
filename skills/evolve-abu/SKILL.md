@@ -27,7 +27,7 @@ Hand-rolling **once, consciously, to keep momentum** is fine — the framework i
 ## The repo and how a change ships (know this cold)
 
 **There is ONE repo:** `~/Documents/github-repos/agentic-brand-universe` (public as
-`garysheng/agentic-brand-universe`). It holds `SPEC.md` (the contract, versioned vX.Y),
+`SupersuitUp/agentic-brand-universe`). It holds `SPEC.md` (the contract, versioned vX.Y),
 `engine/` (Python + tests), `skills/`, `providers/` (vendored generation scripts),
 `registry/`, `SAVE-LOG.md` (changelog), and `run-tests.sh`.
 
@@ -46,7 +46,7 @@ run it, so a change is not live until he does.
 
 **Installing, for anyone:**
 
-    /plugin marketplace add garysheng/agentic-brand-universe
+    /plugin marketplace add SupersuitUp/agentic-brand-universe
     /plugin install abu@agentic-brand-universe
 
 ## The evolution loop

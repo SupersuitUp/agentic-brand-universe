@@ -21,7 +21,7 @@ Everything else is yours.
 **1. They are probably already installed.** ABU ships as a Claude Code plugin from
 its own public repo, so if they ran
 
-    /plugin marketplace add garysheng/agentic-brand-universe
+    /plugin marketplace add SupersuitUp/agentic-brand-universe
     /plugin install abu
 
 then every skill is already present and there is nothing to clone. If they have a

@@ -5,9 +5,14 @@ drift, characters that look the same every time, all version-controlled.**
 [Start here](./WELCOME.md), no commands to learn.
 
 ```
-/plugin marketplace add garysheng/agentic-brand-universe
+/plugin marketplace add SupersuitUp/agentic-brand-universe
 /plugin install abu
 ```
+
+Or, in any repo, from npm: `npm i -D @supersuit/abu`, then `npx abu validate <universe>` or
+`npx abu check-kit <universe> <paths> [--added origin/main..HEAD]` to gate a surface against its
+brand (no-gos and the palette) in a build or CI. The npm version is the engine version. It runs the
+bundled Python engine, so it needs python3 3.9 or later (`ABU_PYTHON` names another).
 
 ---
 
@@ -22,7 +27,7 @@ rendered from.
 - **The architecture:** [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — how the layers fit, what the
   linter checks, and where hosted execution is headed (aspirational, see SPEC §14; everything here runs
   locally today). Diagrams included (hand-authored SVG; there is no generator for them yet).
-- **The known gaps:** [the `gap` label](https://github.com/garysheng/agentic-brand-universe/issues?q=is%3Aissue+label%3Agap) — found and proven by a real run, not yet
+- **The known gaps:** [the `gap` label](https://github.com/SupersuitUp/agentic-brand-universe/issues?q=is%3Aissue+label%3Agap) — found and proven by a real run, not yet
   closed, each with the evidence, the verb that would close it, and why it is still open.
 - **Home / docs:** `agenticbranduniverse.com` (the canonical home of the standard).
 - **Reference implementations:** the Nation of Fire universe (~15 illustrated books over one shared

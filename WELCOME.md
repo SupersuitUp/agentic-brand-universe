@@ -15,7 +15,7 @@ the wrong shape: in this model you state intent and the console does the operati
 
 In Claude Code, run these two lines. They are the only two you will ever type.
 
-    /plugin marketplace add garysheng/agentic-brand-universe
+    /plugin marketplace add SupersuitUp/agentic-brand-universe
     /plugin install abu
 
 Then say:
