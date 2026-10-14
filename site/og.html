@@ -2,53 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Source of og.jpg (1200x630). Render: headless Chrome --screenshot --window-size=1200,630 og.html, then convert to jpg.
+     Ascent tokens only (continental-works-universe canon/craft/the-ascent.json#tokens). -->
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..900,0..100&display=swap');
   *{margin:0;box-sizing:border-box}
   :root{
-    --ground:#0e1117; --surface:#171d26; --surface-2:#1e2530; --line:#2b3542;
-    --struct:#3f4c5a; --text:#c9d3df; --muted:#8592a0; --bright:#eef3f9;
-    --gold:#e3b341; --gold-soft:#f0cd78; --good:#5bbf8f; --iris:#7aa2f7;
-    --mono:'JetBrains Mono',ui-monospace,monospace; --sans:'Inter',system-ui,sans-serif;
+    --mulberry:#A12A5E; --burnt:#DD562F; --mustard:#E9A23B; --sand:#EED79E; --tan:#D6B175;
+    --cream:#F6E7C5; --aqua:#69B1B5; --teal:#105971; --ink:#1E1B19;
+    --serif:"Fraunces",Georgia,serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
   }
   html,body{width:1200px;height:630px}
-  body{
-    font-family:var(--sans); background:var(--ground); color:var(--text);
-    padding:64px 70px; position:relative; overflow:hidden;
-    background-image:
-      radial-gradient(700px 500px at 88% -8%, rgba(227,179,65,.14), transparent),
-      radial-gradient(600px 460px at -6% 8%, rgba(122,162,247,.12), transparent);
-  }
-  .eyebrow{font-family:var(--mono); font-size:20px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:14px}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold)}
-  h1{color:var(--bright); font-weight:900; letter-spacing:-.03em; line-height:1.04; font-size:74px; margin-top:26px; max-width:1000px}
-  h1 em{font-style:normal; color:var(--gold)}
-  .sub{color:var(--muted); font-size:26px; margin-top:24px; max-width:900px; line-height:1.45}
-  .sub b{color:var(--text); font-weight:600}
-  .flow{position:absolute; left:70px; bottom:62px; display:flex; align-items:center; gap:15px; font-family:var(--mono)}
-  .pill{padding:12px 18px; border-radius:12px; border:1px solid var(--line); background:var(--surface-2); font-size:19px; font-weight:600; display:flex; flex-direction:column; gap:2px}
-  .pill .t{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:500}
-  .pill.c{border-color:rgba(122,162,247,.5)} .pill.c .v{color:var(--iris)}
-  .pill.o{border-color:rgba(227,179,65,.5)} .pill.o .v{color:var(--gold)}
-  .pill.p{border-color:rgba(91,191,143,.5)} .pill.p .v{color:var(--good)}
-  .op{font-size:30px; color:var(--struct); font-weight:700}
-  .mark{position:absolute; right:70px; bottom:66px; font-family:var(--mono); font-size:21px; color:var(--muted); text-align:right; line-height:1.7}
-  .mark .b{color:var(--gold); font-weight:600}
-  .glyph{position:absolute; top:58px; right:70px; width:60px; height:60px; border-radius:16px; background:linear-gradient(150deg,var(--gold-soft),#d98a4a); display:grid; place-items:center; color:#1a1206; font-size:30px; font-weight:900; box-shadow:0 12px 30px -8px rgba(227,179,65,.5)}
+  body{background:var(--teal); padding:18px; font-family:var(--serif); color:var(--ink)}
+  .card{position:relative; width:100%; height:100%; background:var(--cream); border-radius:22px; overflow:hidden; padding:62px 72px 0 72px}
+  .chip{display:inline-flex; align-items:center; gap:14px; background:var(--teal); color:var(--cream); border-radius:999px; padding:10px 24px 10px 12px; font-size:24px; font-weight:600}
+  .chip b{width:30px; height:30px; border-radius:50%; background:var(--mustard)}
+  h1{font-size:118px; line-height:.98; font-weight:800; letter-spacing:-.02em; margin-top:34px; font-variation-settings:"SOFT" 50}
+  h1 u{text-decoration:none; box-shadow:inset 0 -9px 0 var(--mulberry)}
+  .sub{font-size:30px; line-height:1.35; margin-top:26px; max-width:860px; color:color-mix(in srgb,var(--ink) 72%,var(--cream))}
+  .foot{position:absolute; left:72px; right:72px; bottom:46px; display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:22px; color:var(--teal)}
+  .foot .tags span{border:2px solid var(--tan); border-radius:999px; padding:6px 16px; margin-right:10px; color:var(--ink)}
+  .foot .url{font-weight:600}
 </style>
 </head>
 <body>
-  <div class="glyph">◆</div>
-  <div class="eyebrow"><span class="dot"></span> An open standard · v0.16 · 2026</div>
-  <h1>The Agentic Brand <em>Universe</em> Standard</h1>
-  <p class="sub">A version-controlled brand <b>universe</b> (the cartridge) + a <b>console</b> (Claude Code + the ABU plugin) → any deliverable, on brand, on demand, with provenance.</p>
-  <div class="flow">
-    <div class="pill c"><span class="t">cartridge · data</span><span class="v">Brand Universe</span></div>
-    <div class="op">+</div>
-    <div class="pill o"><span class="t">console · runtime</span><span class="v">Claude Code + ABU</span></div>
-    <div class="op">→</div>
-    <div class="pill p"><span class="t">output</span><span class="v">any deliverable</span></div>
+  <div class="card">
+    <div class="chip"><b></b>An open standard from Continental Works</div>
+    <h1>Your brand,<br /><u>as code.</u></h1>
+    <p class="sub">A version-controlled universe your agent renders on demand, and a build check that refuses what is off brand.</p>
+    <div class="foot"><div class="tags"><span>plugin</span><span>npm</span><span>spec v0.61</span></div><div class="url">agenticbranduniverse.com</div></div>
   </div>
-  <div class="mark"><span class="b">agenticbranduniverse<wbr />.com</span><br />the end of brand slop</div>
 </body>
 </html>
