@@ -28,6 +28,14 @@ What this module enforces, in `validate` (every defect at once, like `identity.s
 And `scan`: run every no-go's `detect` patterns over a surface's SOURCE files, which is how a
 no-go becomes a refusal rather than a remembered preference (`abu check-kit`).
 
+And `off_palette` (2026-10-14): every colour literal in a surface's source that the
+universe's token file does not hold. The palette is every hex written anywhere in the file a kit's
+`tokensFrom` names (the tokens and whatever the record derives from them) plus white, so a new
+colour is a decision made in canon first, never typed into a surface. And `added_lines`, which lets
+a gate judge only what a change ADDS, so a surface carrying old debt can still ship clean work:
+Gary, 2026-10-14, "The cw plugin should have a guard for pushing any cw surface without consulting
+Abu", after a session restyled a page in hand-picked shadows and a black ring.
+
 Earned 2026-10-06 on continental-works: Gary rejected the six stripes run down one edge of a
 selected card ("I really don't like it when you ... use the stripes like the way you did it for
 Diane") and asked that the replacement "be part of the ABU, as like, I think the ABU should be
@@ -315,3 +323,102 @@ def scan(craft: dict, paths: Iterable[str]) -> list[dict]:
                 hits.append({"nogo": n.get("id"), "file": str(f), "line": line,
                              "excerpt": excerpt, "instead": n.get("instead")})
     return hits
+
+
+HEX = re.compile(r"(?<![\w&/-])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])")
+# No word boundary in front: a Tailwind arbitrary value glues it on (`shadow-[0_2px_rgba(...)]`).
+RGB = re.compile(r"rgba?\(\s*(\d{1,3})\s*[ ,_]\s*(\d{1,3})\s*[ ,_]\s*(\d{1,3})")
+# A Tailwind colour utility from Tailwind's own palette (`ring-black/5`, `text-red-500`): a colour
+# the universe never chose, written as a class name instead of a literal.
+TW = re.compile(r"(?<![\w-])(?:[a-z]+:)*(?:bg|text|border(?:-[trblxy])?|ring|ring-offset|outline|fill|stroke|from|via|to|"
+                r"shadow|decoration|divide|accent|caret|placeholder)-(black|(?:slate|gray|zinc|neutral|stone|red|orange|"
+                r"amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3})"
+                r"(?:/\d{1,3})?(?![\w-])")
+ALWAYS = {"#FFFFFF"}
+
+
+def norm_hex(h: str) -> str:
+    """`#abc`, `#abcd`, `#aabbcc` or `#aabbccdd` -> `#AABBCC` (alpha dropped: it is not a colour)."""
+    h = h.lstrip("#")
+    if len(h) in (3, 4):
+        h = "".join(c * 2 for c in h[:3])
+    return "#" + h[:6].upper()
+
+
+def palette(root: Path, craft: dict) -> set[str] | None:
+    """Every colour the universe declares: each hex in each kit's `tokensFrom` FILE, plus white.
+
+    None when no kit names a `tokensFrom`, which means the universe has not said what its colours
+    are and there is nothing to hold a surface to."""
+    files = {str(k["tokensFrom"]).partition("#")[0] for k in kits(craft) if isinstance(k.get("tokensFrom"), str)}
+    if not files:
+        return None
+    out = set(ALWAYS)
+    for f in files:
+        try:
+            text = (root / f).read_text(errors="replace")
+        except OSError:
+            continue
+        out |= {norm_hex(m.group(0)) for m in HEX.finditer(text)}
+    return out
+
+
+def off_palette(allowed: set[str], paths: Iterable[str]) -> list[dict]:
+    """Every colour literal in `paths` that `allowed` does not hold: {nogo: 'off-palette', ...}."""
+    hits = []
+    for f in _files(paths):
+        if not any(fnmatch.fnmatch(f.name, g) for g in DEFAULT_FILES):
+            continue
+        try:
+            if f.stat().st_size > MAX_BYTES:
+                continue
+            lines = f.read_text(errors="replace").split("\n")
+        except OSError:
+            continue
+        for i, line in enumerate(lines, 1):
+            found = [norm_hex(m.group(0)) for m in HEX.finditer(line)]
+            found += ["#%02X%02X%02X" % tuple(min(255, int(x)) for x in m.groups()) for m in RGB.finditer(line)]
+            for v in found:
+                if v not in allowed:
+                    hits.append({"nogo": "off-palette", "file": str(f), "line": i, "value": v,
+                                 "excerpt": line.strip()[:200], "instead": None})
+            for m in TW.finditer(line):
+                hits.append({"nogo": "off-palette", "file": str(f), "line": i, "value": m.group(0),
+                             "excerpt": line.strip()[:200], "instead": None})
+    return hits
+
+
+def added_lines(paths: Iterable[str], rng: str) -> set[tuple[str, int]]:
+    """(absolute file, line) for every line the git range `rng` adds, in each repo `paths` live in.
+
+    Raises RuntimeError when a path is not in a git repo or git refuses the range, because a gate
+    that silently judged nothing would pass everything."""
+    import subprocess
+    roots = set()
+    for p in paths:
+        d = Path(p).resolve()
+        d = d if d.is_dir() else d.parent
+        r = subprocess.run(["git", "-C", str(d), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"{p} is not inside a git repository")
+        roots.add(r.stdout.strip())
+    out: set[tuple[str, int]] = set()
+    for root in roots:
+        r = subprocess.run(["git", "-C", root, "diff", "-U0", "--no-color", "--no-ext-diff", rng, "--"],
+                           capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(f"git diff {rng} failed in {root}: {r.stderr.strip()}")
+        cur = None
+        for line in r.stdout.split("\n"):
+            if line.startswith("+++ "):
+                cur = None if line[4:] == "/dev/null" else str(Path(root) / line[6:])
+            elif line.startswith("@@") and cur:
+                m = re.search(r"\+(\d+)(?:,(\d+))?", line)
+                start, n = int(m.group(1)), int(m.group(2) or 1)
+                out |= {(cur, start + k) for k in range(n)}
+    return out
+
+
+def only_added(hits: list[dict], added: set[tuple[str, int]]) -> list[dict]:
+    return [h for h in hits if (str(Path(h["file"]).resolve()), h["line"]) in added]
+

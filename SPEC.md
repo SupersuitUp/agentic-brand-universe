@@ -2985,12 +2985,27 @@ to its new text.
 **The gate: `abu check-kit <universe> <path>...`** runs every no-go's `detect` patterns over the
 source files under the paths (CSS, HTML, JS/TS and component files by default; `node_modules`,
 `.git` and build output skipped) and prints each hit with the piece to use instead. Exit 1 on a
-hit, 0 clean, 2 when no no-go declares a detector. Patterns run over the WHOLE file so a rule
+hit, 0 clean, 2 when there is nothing to check (below). Patterns run over the WHOLE file so a rule
 split across lines is caught; write them with `[^}]*` rather than `.*` so one match cannot span
 two CSS rules. A detector is a floor, not proof: a no-go about taste ("no italics") may have
 none, and an inline React style is invisible to a CSS-shaped pattern. Run it over every surface
 the universe governs before calling a rename of a piece done, and over a sibling repo to list
 the places still on a superseded rule.
+
+**The palette is part of the gate (2026-10-14).** When a kit names a `tokensFrom`, `check-kit`
+also refuses every colour literal in a surface's source that the token FILE does not hold: a hex,
+an `rgb()`/`rgba()` (alpha ignored, and found inside a Tailwind arbitrary value too), or a Tailwind
+palette class such as `ring-black/5` or `text-red-500`. The palette is every hex written anywhere in
+that file, so a value the record derives from a token passes, plus white. A new colour is decided in
+canon first, never typed into a surface. `--no-palette` skips it. The exit-2 case is now "no no-go
+declares a detector AND no kit names a `tokensFrom`".
+
+**`--added <range>` judges only what a change adds.** It keeps the hits on lines the git range adds
+(`origin/main..HEAD`) in the repos the paths live in, so a surface carrying old debt can still ship
+clean work, and a push guard can refuse exactly what the push introduces. A path outside git, or a
+range git refuses, is exit 2, never a silent pass. Earned when Gary asked that the Continental Works
+plugin refuse any push of a CW surface that had not consulted ABU, after a session restyled a page
+in a hand-picked shadow and a black ring that this gate now names.
 
 `abu kit <universe> [--json]` lists the pieces and no-gos. The scaffolding verb is the
 `add-piece-or-no-go` skill.

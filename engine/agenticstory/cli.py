@@ -70,6 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
     ck = sub.add_parser("check-kit", help="refuse a surface whose source files use a no-go the kit can detect")
     ck.add_argument("universe"); ck.add_argument("paths", nargs="+", help="files or directories to scan")
     ck.add_argument("--json", action="store_true")
+    ck.add_argument("--added", metavar="RANGE", help="judge only lines this git range adds (e.g. origin/main..HEAD)")
+    ck.add_argument("--no-palette", action="store_true", help="skip the off-palette colour check")
     ln = sub.add_parser("lines", help="list the brand's golden lines (SPEC §13.2 lines records)")
     ln.add_argument("universe"); ln.add_argument("--json", action="store_true")
     ln.add_argument("--status", choices=["candidate", "golden", "retired"])
@@ -651,16 +653,28 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  no-go  {n.get('id'):34} instead: {n.get('instead') or '-'}")
         return 0
     if args.cmd == "check-kit":
-        from .kit import nogos, pieces_by_id, scan
-        if not any(n.get("detect") for n in nogos(store.craft)):
-            print("check-kit: no no-go in this universe declares a detect pattern, so nothing can be checked")
+        from .kit import nogos, pieces_by_id, scan, palette, off_palette, added_lines, only_added
+        allowed = None if args.no_palette else palette(Path(args.universe), store.craft)
+        if not any(n.get("detect") for n in nogos(store.craft)) and allowed is None:
+            print("check-kit: no no-go in this universe declares a detect pattern and no kit names a tokensFrom, so nothing can be checked")
             return 2
         hits = scan(store.craft, args.paths)
+        if allowed is not None:
+            hits += off_palette(allowed, args.paths)
+        if args.added:
+            try:
+                hits = only_added(hits, added_lines(args.paths, args.added))
+            except RuntimeError as e:
+                print(f"check-kit: {e}")
+                return 2
         if args.json:
             print(json.dumps(hits, indent=2))
             return 1 if hits else 0
         pieces = pieces_by_id(store.craft)
         for h in hits:
+            if h["nogo"] == "off-palette":
+                print(f"{h['file']}:{h['line']}  OFF-PALETTE {h['value']}  -> use a token from the kit's tokensFrom, or add the colour to canon first\n    {h['excerpt']}")
+                continue
             inst = pieces.get(h["instead"] or "", {}).get("name") or h["instead"] or "(see the no-go)"
             print(f"{h['file']}:{h['line']}  NO-GO {h['nogo']}  -> use {inst}\n    {h['excerpt']}")
         print(f"check-kit: {len(hits)} no-go use(s)" if hits else "check-kit: clean")

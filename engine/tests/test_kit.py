@@ -168,10 +168,59 @@ class KitTest(unittest.TestCase):
         self.assertIn("The selection ring", out.getvalue())
         with redirect_stdout(io.StringIO()):
             self.assertEqual(main(["check-kit", str(self.dir), str(site / "ring.css")]), 0)
-        k = kit(); k["noGos"][0].pop("detect")
+        k = kit(); k["noGos"][0].pop("detect"); k.pop("tokensFrom")
         (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(k))
         with redirect_stdout(io.StringIO()):
             self.assertEqual(main(["check-kit", str(self.dir), str(site)]), 2)
+
+    # ---- the palette (v0.61): a colour the token file does not hold is refused ----
+    def test_off_palette_colours_are_refused_and_tokens_pass(self):
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        site = self.dir / "pal"; site.mkdir()
+        (site / "ok.css").write_text(".a{color:#105971;background:#fff;border-color:rgba(233,162,59,.4)}\n.b{color:#e9a23b80}\n")
+        (site / "bad.tsx").write_text('const a = "x";\nconst s = { boxShadow: "0 1px 2px rgba(30,25,20,0.5)", color: "#123456" };\n<a href="#top">up</a>\n<div className="ring-1 ring-black/5 shadow-[0_2px_8px_rgba(10,11,12,0.5)] bg-(--r-teal)" />\n')
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(main(["check-kit", str(self.dir), str(site)]), 1)
+        got = out.getvalue()
+        self.assertIn("OFF-PALETTE #1E1914", got)
+        self.assertIn("OFF-PALETTE #123456", got)
+        self.assertIn("OFF-PALETTE ring-black/5", got, "a Tailwind palette class is a colour the universe never chose")
+        self.assertIn("OFF-PALETTE #0A0B0C", got, "an rgba inside a Tailwind arbitrary value still counts")
+        self.assertNotIn("ok.css", got, "tokens, white and a token with alpha are on the palette")
+        self.assertNotIn("#TOP", got.upper().replace("#TOP\">", ""), "an anchor is not a colour")
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["check-kit", str(self.dir), str(site), "--no-palette"]), 0)
+
+    def _git(self, repo, *a):
+        import subprocess
+        subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+
+    def test_added_judges_only_what_the_range_adds(self):
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        repo = self.dir / "surface"; repo.mkdir()
+        self._git(repo, "init", "-q"); self._git(repo, "config", "user.email", "t@t"); self._git(repo, "config", "user.name", "t")
+        (repo / "old.css").write_text(".old{color:#abcdef}\n")
+        self._git(repo, "add", "."); self._git(repo, "commit", "-qm", "old debt")
+        (repo / "old.css").write_text(".old{color:#abcdef}\n.new{color:#105971}\n")
+        (repo / "new.css").write_text(".n{color:#00ff00}\n")
+        self._git(repo, "add", "."); self._git(repo, "commit", "-qm", "the push")
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(main(["check-kit", str(self.dir), str(repo), "--added", "HEAD~1..HEAD"]), 1)
+        self.assertIn("#00FF00", out.getvalue())
+        self.assertNotIn("#ABCDEF", out.getvalue(), "old debt on an untouched line is not this push's")
+        (repo / "new.css").write_text(".n{color:#105971}\n")
+        self._git(repo, "commit", "-qam", "fixed")
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["check-kit", str(self.dir), str(repo), "--added", "HEAD~1..HEAD"]), 0)
+
+    def test_added_outside_git_cannot_judge(self):
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        loose = Path(tempfile.mkdtemp(prefix="abu-loose-"))
+        (loose / "a.css").write_text(".a{color:#00ff00}\n")
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(main(["check-kit", str(self.dir), str(loose), "--added", "HEAD~1..HEAD"]), 2)
+        self.assertIn("not inside a git repository", out.getvalue())
+        shutil.rmtree(loose, ignore_errors=True)
 
     def test_kit_verb_lists(self):
         (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
