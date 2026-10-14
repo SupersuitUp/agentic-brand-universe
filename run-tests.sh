@@ -33,7 +33,11 @@ run() {  # run <label> <dir> <cmd...>
   total=$((total + n))
   if [ $status -ne 0 ]; then
     echo "=== $1 === $n tests, FAILED (exit $status)"
-    printf '%s\n' "$out" | tail -12
+    # Every FAIL/ERROR block, then the tail. `tail -12` alone showed only the warnings a
+    # suite printed after its summary, so CI said "failures=2" and never named them
+    # (2026-10-14, two Linux-only failures nobody could see).
+    printf '%s\n' "$out" | awk '/^(FAIL|ERROR): /{p=1} /^Ran [0-9]+ test/{p=0} p' | head -200
+    printf '%s\n' "$out" | tail -4
     fail=1
   else
     echo "=== $1 === $n tests OK"
