@@ -1,3 +1,12 @@
+## 2026-10-14: the report step is in every skill (v1.46.0)
+
+v1.46.0: the 1.45.0 report offer lived only in the front door and the steward, while misfires happen
+mid-chain in the other forty skills. It is now a `report` block generated into every SKILL.md by
+`docsfile` (one source, the skill's own `--skill` filled in); `build_file` appends the fences to a skill
+that has none, and `check` names a skill missing them. The front door's hand-written copy was replaced
+by the block in place. `check` also stopped crashing on a block whose source file is absent (it reports
+it), found by the new fake-root tests. Tests: TestReportBlock in test_docsfile.py, seen red then green.
+
 ## 2026-10-14: skip a check with a reason, report what ABU got wrong (1.45.0)
 
 `abu-allow: <reason>` waives one check-kit line (end of line, or a comment-only line above; a

@@ -139,19 +139,15 @@ When a work session ends, run status again and report the delta. The number movi
 the reward, and a session that improved nothing should say so honestly rather than
 narrating activity.
 
-## When ABU got something wrong, offer to report it
+<!-- BEGIN GENERATED: report -->
+## When this skill misfires, offer to report it
 
-A verb that misfired, a check that refused something it should not have, a skill that left
-out an obvious step: the person who just hit it is the only one who knows, and only right
-now. Offer, in one line, to file it. On a yes, run `abu report` yourself (never show them the
-command) with every field written from what you just watched: `what` (what happened),
-`--expected` (what should have happened, and why), `--command` (the exact command or the
-ask), `--skill`. A check-kit refusal they believe is wrong is `abu check-kit ... --report`,
-which attaches the findings and the rule each one broke. Hand them the printed link as a named
-link to read and submit; it sends nothing on its own. Inside Freedom,
-`freedom:suggest-an-improvement` does the same and files it for them. Gary, 2026-10-14: "it is
-very very important that really good context gets put into the issues so that we can address
-them really well."
+If this skill did not one-shot (a step failed, a check refused something it should not have, an instruction sent you the wrong way, you fixed its output by hand, or it left out an obvious step), the person running it is the only one who knows, and only right now. Offer once, in one line, to report it. On a yes, run it yourself and never show them the command:
+
+    abu report "<what happened>" --expected "<what should have happened, and why>" --command "<the exact command or ask>" --skill abu:abu
+
+Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead.
+<!-- END GENERATED: report -->
 
 ## Definition of done
 

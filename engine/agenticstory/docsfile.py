@@ -434,10 +434,59 @@ def _replace_block(text: str, name: str, body: list[str]) -> str:
     return pre + "\n".join([b, *body, e]) + post
 
 
+def render_report(skill: str) -> list[str]:
+    """The misfire-report step, one source stamped into every skill (2026-10-14).
+
+    It shipped in the front door and the steward only, while misfires happen
+    mid-chain inside the other forty skills. Pasting it forty times would be the
+    hand-kept-copies disease this module exists to treat, so it is generated."""
+    return [
+        "## When this skill misfires, offer to report it",
+        "",
+        "If this skill did not one-shot (a step failed, a check refused something it should "
+        "not have, an instruction sent you the wrong way, you fixed its output by hand, or it "
+        "left out an obvious step), the person running it is the only one who knows, and only "
+        "right now. Offer once, in one line, to report it. On a yes, run it yourself and never "
+        "show them the command:",
+        "",
+        f'    abu report "<what happened>" --expected "<what should have happened, and why>" '
+        f'--command "<the exact command or ask>" --skill abu:{skill}',
+        "",
+        "Write every field from what you just watched: an issue that says what was expected and "
+        "how to reproduce it gets fixed, and \"it broke\" does not. A `check-kit` refusal they "
+        "believe is wrong is `abu check-kit ... --report`, which attaches the findings and the "
+        "rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them "
+        "the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it "
+        "for them. If you maintain ABU itself, fix it through `evolve-abu` instead.",
+    ]
+
+
+def skill_files(root: Path) -> list[str]:
+    d = root / "skills"
+    if not d.is_dir():
+        return []
+    return [f"skills/{s.name}/SKILL.md" for s in sorted(d.iterdir())
+            if (s / "SKILL.md").is_file()]
+
+
+def _blocks(root: Path) -> dict:
+    """BLOCKS plus one `report` block per skill, enumerated rather than named."""
+    out = dict(BLOCKS)
+    for rel in skill_files(root):
+        skill = rel.split("/")[1]
+        out[rel] = {"report": lambda _root, s=skill: render_report(s)}
+    return out
+
+
 def build_file(root: Path, rel: str) -> str:
-    """The regenerated text of one documented file. Does not write."""
+    """The regenerated text of one documented file. Does not write.
+
+    A skill with no report fences gets them appended, so a new skill is stamped by
+    `abu build-docs` instead of waiting for someone to remember the paragraph."""
     text = (root / rel).read_text()
-    for name, render in BLOCKS[rel].items():
+    for name, render in _blocks(root)[rel].items():
+        if rel.startswith("skills/") and begin(name) not in text:
+            text = text.rstrip("\n") + "\n\n" + begin(name) + "\n" + end(name) + "\n"
         text = _replace_block(text, name, render(root))
     return text
 
@@ -465,7 +514,7 @@ def build(root: Path | None = None, write: bool = True) -> list[str]:
     """Regenerate every generated block. Returns the files that changed."""
     root = root or repo_root()
     changed = []
-    for rel in BLOCKS:
+    for rel in _blocks(root):
         path = root / rel
         if not path.is_file():
             continue
@@ -509,15 +558,17 @@ def check(root: Path | None = None) -> list[str]:
                 f"site/index.html claims v{', v'.join(wrong)}; the repo declares "
                 f"v{' and v'.join(sorted(allowed))}")
 
-    for rel in BLOCKS:
+    for rel in _blocks(root):
         path = root / rel
         if not path.is_file():
             problems.append(f"{rel} is missing: run `abu build-docs`")
             continue
         try:
-            if build_file(root, rel) != path.read_text():
+            if rel.startswith("skills/") and begin("report") not in path.read_text():
+                problems.append(f"{rel} has no report block: run `abu build-docs`")
+            elif build_file(root, rel) != path.read_text():
                 problems.append(f"{rel} is stale: run `abu build-docs`")
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             problems.append(f"{rel}: {exc}")
 
     projected = project_manifest(root)

@@ -206,5 +206,55 @@ class TestGate(unittest.TestCase):
             self.assertTrue(any("spec version mismatch" in p for p in problems), problems)
 
 
+class TestReportBlock(unittest.TestCase):
+    """Every skill ends by offering to report a misfire (2026-10-14).
+
+    The report step shipped in the front door and the steward only, so a skill that
+    misfired mid-chain, where misfires actually happen, never offered it. The paragraph
+    is GENERATED into every SKILL.md rather than pasted, so a new skill gets it from
+    `abu build-docs` and a skill without it fails the gate."""
+
+    def _fake_root(self, tmp, skill_text, spec=False):
+        fake = Path(tmp) / "repo"
+        (fake / "skills" / "demo").mkdir(parents=True)
+        if spec:
+            (fake / "SPEC.md").write_text(f"# Spec\n\n**v{SPEC_VERSION} — 2026-01-01.** x\n")
+        (fake / "skills" / "demo" / "SKILL.md").write_text(skill_text)
+        return fake
+
+    def test_every_skill_carries_the_report_block_naming_itself(self):
+        missing = []
+        for d in sorted((ROOT / "skills").iterdir()):
+            f = d / "SKILL.md"
+            if not f.is_file():
+                continue
+            text = f.read_text()
+            if docsfile.begin("report") not in text or f"--skill abu:{d.name}" not in text:
+                missing.append(d.name)
+        self.assertEqual(missing, [])
+
+    def test_check_refuses_a_skill_without_the_block(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = self._fake_root(tmp, "---\nname: demo\ndescription: d\n---\n\nBody.\n", spec=True)
+            problems = docsfile.check(fake)
+            self.assertTrue(any("skills/demo/SKILL.md" in p for p in problems), problems)
+
+    def test_build_appends_the_block_once(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = self._fake_root(tmp, "---\nname: demo\ndescription: d\n---\n\nBody.\n")
+            docsfile.build(fake)
+            text = (fake / "skills" / "demo" / "SKILL.md").read_text()
+            self.assertTrue(text.startswith("---\nname: demo"))
+            self.assertIn("Body.", text)
+            self.assertEqual(text.count(docsfile.begin("report")), 1)
+            self.assertIn("--skill abu:demo", text)
+            docsfile.build(fake)
+            self.assertEqual((fake / "skills" / "demo" / "SKILL.md").read_text(), text)
+            (fake / "SPEC.md").write_text(f"# Spec\n\n**v{SPEC_VERSION} — 2026-01-01.** x\n")
+            self.assertNotIn("skills/demo/SKILL.md", " ".join(docsfile.check(fake)))
+
+
 if __name__ == "__main__":
     unittest.main()

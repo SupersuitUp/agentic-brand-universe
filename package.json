@@ -1,6 +1,6 @@
 {
   "name": "@supersuit/abu",
-  "version": "1.45.0",
+  "version": "1.46.0",
   "description": "Agentic Brand Universe: a brand as typed, version-controlled canon. The `abu` command validates a universe and gates a surface against it (check-kit: no-gos and the palette).",
   "license": "MIT",
   "author": "Gary Sheng",

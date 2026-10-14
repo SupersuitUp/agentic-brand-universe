@@ -96,3 +96,13 @@ as an "undefended face" needing brow, eyes and mouth spelled out.
 
 `lint-universe` warns `CHARACTER-WARDROBE-NOT-PINNED` when a recurring character has no
 wardrobe sheet and no pose passing one.
+
+<!-- BEGIN GENERATED: report -->
+## When this skill misfires, offer to report it
+
+If this skill did not one-shot (a step failed, a check refused something it should not have, an instruction sent you the wrong way, you fixed its output by hand, or it left out an obvious step), the person running it is the only one who knows, and only right now. Offer once, in one line, to report it. On a yes, run it yourself and never show them the command:
+
+    abu report "<what happened>" --expected "<what should have happened, and why>" --command "<the exact command or ask>" --skill abu:add-character
+
+Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead.
+<!-- END GENERATED: report -->
