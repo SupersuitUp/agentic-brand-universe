@@ -213,6 +213,27 @@ class KitTest(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             self.assertEqual(main(["check-kit", str(self.dir), str(repo), "--added", "HEAD~1..HEAD"]), 0)
 
+    def test_baseline_tolerates_old_findings_and_refuses_new_ones(self):
+        import os
+        (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
+        site = self.dir / "b"; site.mkdir()
+        (site / "a.css").write_text(".x{color:#abcdef}\n.y{color:#abcdef}\n")
+        here = os.getcwd(); os.chdir(site)
+        try:
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["check-kit", str(self.dir), "a.css", "--write-baseline", "base.json"]), 0)
+                self.assertEqual(main(["check-kit", str(self.dir), "a.css", "--baseline", "base.json"]), 0)
+            # Lines move: still tolerated. A new colour, or a third copy of an old one: refused.
+            (site / "a.css").write_text("/* moved */\n.x{color:#abcdef}\n.y{color:#abcdef}\n.z{color:#00ff00}\n.y{color:#abcdef}\n")
+            with redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(main(["check-kit", str(self.dir), "a.css", "--baseline", "base.json"]), 1)
+            self.assertIn("#00FF00", out.getvalue())
+            self.assertEqual(out.getvalue().count("#ABCDEF"), 1, "two recorded copies excuse two, not three")
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["check-kit", str(self.dir), "a.css", "--baseline", "missing.json"]), 2)
+        finally:
+            os.chdir(here)
+
     def test_added_outside_git_cannot_judge(self):
         (self.dir / "canon" / "craft" / "brand-kit.json").write_text(json.dumps(kit()))
         loose = Path(tempfile.mkdtemp(prefix="abu-loose-"))

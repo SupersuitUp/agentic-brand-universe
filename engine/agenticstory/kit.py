@@ -422,3 +422,37 @@ def added_lines(paths: Iterable[str], rng: str) -> set[tuple[str, int]]:
 def only_added(hits: list[dict], added: set[tuple[str, int]]) -> list[dict]:
     return [h for h in hits if (str(Path(h["file"]).resolve()), h["line"]) in added]
 
+
+def _key(h: dict, base: Path) -> tuple:
+    """What a finding IS, independent of where it currently sits: line numbers move, so a baseline
+    keys on the file, the rule, the value and the line's text."""
+    try:
+        f = str(Path(h["file"]).resolve().relative_to(base.resolve()))
+    except ValueError:
+        f = str(h["file"])
+    return (f, h.get("nogo") or "", h.get("value") or "", re.sub(r"\s+", " ", h.get("excerpt") or "").strip())
+
+
+def write_baseline(hits: list[dict], path: str, base: Path) -> int:
+    rows = sorted(_key(h, base) for h in hits)
+    Path(path).write_text(json.dumps({"version": 1, "note": "Findings this surface carried when the gate was switched on. "
+                                      "check-kit --baseline tolerates these and refuses anything new; fix one and delete its row.",
+                                      "findings": [dict(zip(("file", "nogo", "value", "excerpt"), r)) for r in rows]}, indent=1) + "\n")
+    return len(rows)
+
+
+def beyond_baseline(hits: list[dict], path: str, base: Path) -> list[dict]:
+    """The hits a committed baseline does not account for, counting duplicates (two identical lines
+    are two findings, so fixing one never silently excuses a new one)."""
+    from collections import Counter
+    data = json.loads(Path(path).read_text())
+    left = Counter(tuple(r.get(k, "") for k in ("file", "nogo", "value", "excerpt")) for r in data.get("findings", []))
+    out = []
+    for h in hits:
+        k = _key(h, base)
+        if left[k] > 0:
+            left[k] -= 1
+        else:
+            out.append(h)
+    return out
+

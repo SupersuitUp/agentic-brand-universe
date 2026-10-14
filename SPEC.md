@@ -3007,6 +3007,12 @@ range git refuses, is exit 2, never a silent pass. Earned when Gary asked that t
 plugin refuse any push of a CW surface that had not consulted ABU, after a session restyled a page
 in a hand-picked shadow and a black ring that this gate now names.
 
+**`--baseline <file>` is the ratchet for a build that has no git history to diff** (a shallow CI
+clone). `--write-baseline <file>` records every current finding, keyed on file, rule, value and the
+line's text rather than its number, so moving code never trips it; `--baseline <file>` then refuses
+only findings the file does not account for, counting duplicates. Commit the file in the surface;
+fixing a finding means deleting its row. A missing or unreadable baseline is exit 2.
+
 `abu kit <universe> [--json]` lists the pieces and no-gos. The scaffolding verb is the
 `add-piece-or-no-go` skill.
 

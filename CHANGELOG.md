@@ -3,6 +3,13 @@
 The npm package `@supersuit/abu` is the ABU engine at the same version as the `abu` Claude plugin;
 both are released by one `vX.Y.Z` tag. The full record of every version is [SAVE-LOG.md](./SAVE-LOG.md).
 
+## 1.44.0 (2026-10-14)
+
+- `abu check-kit --write-baseline <file>` records a surface's existing findings, and `--baseline <file>`
+  refuses only new ones (keyed on file, rule, value and line text, so moved code never trips it). This is
+  the gate for a CI build, which has no git history to diff against.
+- First release published by the version tag alone, through npm trusted publishing.
+
 ## 1.43.0 (2026-10-14)
 
 - First npm release. `npm i -D @supersuit/abu` gives any repo the `abu` command, running the bundled

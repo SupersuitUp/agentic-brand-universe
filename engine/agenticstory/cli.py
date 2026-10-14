@@ -72,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     ck.add_argument("--json", action="store_true")
     ck.add_argument("--added", metavar="RANGE", help="judge only lines this git range adds (e.g. origin/main..HEAD)")
     ck.add_argument("--no-palette", action="store_true", help="skip the off-palette colour check")
+    ck.add_argument("--baseline", metavar="FILE", help="tolerate the findings recorded in FILE (paths relative to the cwd); refuse anything new")
+    ck.add_argument("--write-baseline", metavar="FILE", help="record every current finding in FILE and exit 0")
     ln = sub.add_parser("lines", help="list the brand's golden lines (SPEC §13.2 lines records)")
     ln.add_argument("universe"); ln.add_argument("--json", action="store_true")
     ln.add_argument("--status", choices=["candidate", "golden", "retired"])
@@ -653,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  no-go  {n.get('id'):34} instead: {n.get('instead') or '-'}")
         return 0
     if args.cmd == "check-kit":
-        from .kit import nogos, pieces_by_id, scan, palette, off_palette, added_lines, only_added
+        from .kit import nogos, pieces_by_id, scan, palette, off_palette, added_lines, only_added, write_baseline, beyond_baseline
         allowed = None if args.no_palette else palette(Path(args.universe), store.craft)
         if not any(n.get("detect") for n in nogos(store.craft)) and allowed is None:
             print("check-kit: no no-go in this universe declares a detect pattern and no kit names a tokensFrom, so nothing can be checked")
@@ -666,6 +668,16 @@ def main(argv: list[str] | None = None) -> int:
                 hits = only_added(hits, added_lines(args.paths, args.added))
             except RuntimeError as e:
                 print(f"check-kit: {e}")
+                return 2
+        if args.write_baseline:
+            n = write_baseline(hits, args.write_baseline, Path.cwd())
+            print(f"check-kit: recorded {n} finding(s) in {args.write_baseline}")
+            return 0
+        if args.baseline:
+            try:
+                hits = beyond_baseline(hits, args.baseline, Path.cwd())
+            except (OSError, ValueError) as e:
+                print(f"check-kit: cannot read the baseline {args.baseline}: {e}")
                 return 2
         if args.json:
             print(json.dumps(hits, indent=2))
