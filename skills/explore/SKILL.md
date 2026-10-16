@@ -53,7 +53,8 @@ python3 skills/explore/scripts/explore.py \
   --style-pack <path/to/pack> \
   [--entity <universe>:<id>[@look] ...] [--no-wardrobe] [--entity-required-only] \
   [--ref <locked-plate> ...] [--ref-first] \
-  [--size 1536x1024] [--quality high] [--concurrency 3]
+  [--size 1536x1024] [--quality high] [--concurrency 3] \
+  [--at-size 64,240] [--background '#FBF5E7']
 ```
 
 **Exploring a canon entity: pass `--entity`, never hand-picked plates.** A comparison set of
@@ -69,6 +70,13 @@ differently.
 
 `variants.txt` is one variant per line, `id: text`. Ids become filenames, so make them
 readable (`A-ducted-sphere`, not `v1`), because the id is how the operator will answer.
+
+**Exploring something that is shown SMALL (an avatar, an icon, a thumbnail, a favicon-sized
+mark): pass `--at-size` and `--background`.** `--at-size 64,240 --background '#FBF5E7'` adds
+`AT-SIZE-SHEET.png`, every roll at exactly 64 and 240 px on the surface's ground, beside the
+ordinary sheet. Judge the direction there, not on the big sheet: detail that sells a portrait
+at 690 px on white is mud at 64 px on paper. Earned 2026-10-15 (#59), when reader portraits
+needed this view and a one-off script drew it. Give the sizes the surface actually uses.
 
 Each roll writes `<id>.png`, `<id>.prompt.txt` and `<id>.log` into the out-dir. Use
 `--dry-run` to print the assembled commands and spend nothing.

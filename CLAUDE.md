@@ -14,6 +14,7 @@ would use at the moment you need it.
 | ...do this | Use |
 |---|---|
 | **make a contact sheet** of several renders | `render-readback/scripts/contact_sheet.py --out X.png --cols 3 *.png` |
+| **see a set at the size and on the ground it will be used** (an avatar at 64 px on paper, an icon, a thumbnail) | `render-readback/scripts/contact_sheet.py --out X.png --at-size 64,240 --background '#FBF5E7' *.png` (or `explore --at-size 64,240 --background ...`, which writes `AT-SIZE-SHEET.png`). Never hand-roll a compare script. |
 | **verify a render** — did the canon arrive, did the look bind, is the frame dead | `render-readback/scripts/verify_render.py <png> --expect "id@look"` |
 | **crop in on a detail** to check an invariant (jaw, throat, a mark) | `render-readback/scripts/crop_zoom.py` — **use it BEFORE calling a defect.** A contact sheet is downsampled; a lace hem called "vertical stripes" from a 3-up was a correct horizontal band when zoomed. |
 | **measure a figure** in a plate | `render-readback/scripts/measure.py figure` (`star` mode was withdrawn for false precision) |

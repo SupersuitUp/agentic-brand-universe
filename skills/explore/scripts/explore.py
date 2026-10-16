@@ -53,6 +53,30 @@ def failure_reason(log):
             return l[:300]
     return lines[-1][:300] if lines else None
 
+def sheet_commands(cs, out, made, at_size=(), background=None):
+    """`[(sheet path, argv)]` for the sheets a fan-out gets.
+
+    The ordinary labelled CONTACT-SHEET.png whenever there is more than one roll to compare,
+    and AT-SIZE-SHEET.png whenever `--at-size` was asked for (one roll at its real size is
+    already worth looking at). `--background` reaches both.
+    """
+    out = pathlib.Path(out)
+    rolls = [str(out / f"{v}.png") for v in made]
+    bg = ["--background", background] if background else []
+    cmds = []
+    if len(made) > 1:
+        cmds.append((out / "CONTACT-SHEET.png",
+                     ["python3", str(cs), *rolls, "--out", str(out / "CONTACT-SHEET.png"),
+                      "--cols", str(min(len(made), 3)), "--label", *bg]))
+    if at_size and made:
+        sizes = []
+        for x in at_size:
+            sizes += ["--at-size", x]
+        cmds.append((out / "AT-SIZE-SHEET.png",
+                     ["python3", str(cs), *rolls, "--out", str(out / "AT-SIZE-SHEET.png"),
+                      *sizes, "--label", *bg]))
+    return cmds
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--subject-file", required=True, help="the INVARIANT half of the prompt")
@@ -84,6 +108,14 @@ def main():
                    help="Override the model. Omit to use the provider adapter's own default.")
     p.add_argument("--quality", default="high")
     p.add_argument("--concurrency", type=int, default=3)
+    # AT THE SIZE THE SURFACE SHOWS IT (issue #59). An avatar used at 64 px on paper cannot
+    # be judged from a 690 px cell on white; this adds AT-SIZE-SHEET.png beside the ordinary
+    # sheet, drawn by contact_sheet.py --at-size, so nobody hand-rolls the comparison again.
+    p.add_argument("--at-size", action="append", default=[], metavar="PX[,PX]",
+                   help="also build AT-SIZE-SHEET.png with every roll at these sizes "
+                        "(longest edge, e.g. 64,240), the way the surface will show them")
+    p.add_argument("--background", default=None, metavar="#RRGGBB",
+                   help="the surface's ground colour for both sheets, e.g. '#FBF5E7'")
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
 
@@ -149,18 +181,16 @@ def main():
     # Labelled on purpose: the cells carry the variant ids, so a pick is one word rather than a
     # description of a picture.
     made = [vid for vid, _ in jobs if (out / f"{vid}.png").exists()]
-    if len(made) > 1:
-        sheet = out / "CONTACT-SHEET.png"
-        cs = pathlib.Path(__file__).resolve().parents[2] / "render-readback" / "scripts" / "contact_sheet.py"
-        if cs.exists():
-            cols = min(len(made), 3)
-            rc = subprocess.call(["python3", str(cs), *[str(out / f"{v}.png") for v in made],
-                                  "--out", str(sheet), "--cols", str(cols), "--label"])
+    cs = pathlib.Path(__file__).resolve().parents[2] / "render-readback" / "scripts" / "contact_sheet.py"
+    cmds = sheet_commands(cs, out, made, a.at_size, a.background)
+    if cmds and not cs.exists():
+        print(f"[explore] no contact sheet: {cs} not found")
+    elif cmds:
+        for sheet, cmd in cmds:
+            rc = subprocess.call(cmd)
             # A failed sheet never fails the run: the rolls are the deliverable and they exist.
             print(f"[explore] contact sheet: {sheet}" if rc == 0 and sheet.exists()
-                  else "[explore] contact sheet FAILED to build; the rolls are unaffected")
-        else:
-            print(f"[explore] no contact sheet: {cs} not found")
+                  else f"[explore] {sheet.name} FAILED to build; the rolls are unaffected")
 
     # THE NEXT MOVES, PRINTED WHERE THE WORK ENDS.
     #

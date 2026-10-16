@@ -126,5 +126,41 @@ class AFailedRollSaysWhy(unittest.TestCase):
     def test_no_log_is_no_reason(self):
         self.assertIsNone(self._reason(None))
 
+
+class AtSizeSheet(unittest.TestCase):
+    """`--at-size` and `--background` reach contact_sheet.py (issue #59)."""
+
+    def _mod(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("explore_mod2", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_without_the_flags_only_the_ordinary_sheet(self):
+        cmds = self._mod().sheet_commands("cs.py", "/o", ["a", "b"])
+        self.assertEqual([c[0].name for c in cmds], ["CONTACT-SHEET.png"])
+        self.assertNotIn("--background", cmds[0][1])
+
+    def test_at_size_adds_a_second_sheet_with_every_roll(self):
+        cmds = self._mod().sheet_commands("cs.py", "/o", ["a", "b", "c"], ["64,240"], "#FBF5E7")
+        names = [c[0].name for c in cmds]
+        self.assertEqual(names, ["CONTACT-SHEET.png", "AT-SIZE-SHEET.png"])
+        at = cmds[1][1]
+        self.assertIn("--at-size", at)
+        self.assertEqual(at[at.index("--at-size") + 1], "64,240")
+        for v in ("a", "b", "c"):
+            self.assertIn(f"/o/{v}.png", at)
+        for _, cmd in cmds:
+            self.assertEqual(cmd[cmd.index("--background") + 1], "#FBF5E7")
+
+    def test_one_roll_still_gets_its_at_size_sheet(self):
+        cmds = self._mod().sheet_commands("cs.py", "/o", ["a"], ["64"])
+        self.assertEqual([c[0].name for c in cmds], ["AT-SIZE-SHEET.png"])
+
+    def test_the_flags_parse(self):
+        r = dry_run(["--at-size", "64,240", "--background", "#FBF5E7"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
 if __name__ == "__main__":
     unittest.main()

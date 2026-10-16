@@ -12,7 +12,7 @@ The quality gate that catches a defective render before it ships or locks. A ren
 2. **Read the image back.** Open the just-generated image. For EACH invariant, crop-zoom the relevant region (the face for a face rule, the chest for a patch rule, the feet for a shoe rule) and judge it directly against the invariant. Do not judge from the thumbnail or from memory of the prompt.
 
    Use the two scripts in `scripts/` rather than writing PIL by hand. Both take FRACTIONS of the image, so a box survives a re-render at another size:
-   - `contact_sheet.py OUT.png --cols N IMG...` — the WIDE pass over a batch.
+   - `contact_sheet.py OUT.png --cols N IMG...` — the WIDE pass over a batch. For anything shown SMALL (an avatar, an icon, a thumbnail), add `--at-size 64,240 --background '#RRGGBB'` to see every image at exactly the size and on the ground the surface uses; detail that reads at 690 px turns to mud at 64.
    - `crop_zoom.py OUT.png IMG --box X0,Y0,X1,Y1 --label "what this must show"` (repeatable) — the NARROW pass, which is where most invariants actually live: a pendant that must be a four-point star and not a crucifix, two gold incisors, a patch on the correct side, a face-down phone.
 
    Pass `--grid 4x4` instead of `--box` when you do not already know where the detail sits. Guessing a box, getting back a rectangle of empty shadow, and guessing again costs two round trips; the grid costs one. (Earned on the-little-door, 2026-07-30, which guessed wrong twice in one run.)

@@ -1404,6 +1404,16 @@ not a sheet or a parked candidate must be on the sheet or the build REFUSES and 
 is absent. It is opt-in, because a deliberate subset is a legitimate sheet; what was wrong
 was a documented refusal that no code performed.
 
+**A set is judged at the size and on the ground it will live on (v0.62).**
+`contact_sheet.py --at-size 64,240 --background '#FBF5E7'` draws one band per size, every
+image with its LONGEST edge at exactly that many pixels (aspect kept, never cropped), on the
+surface's ground colour, which is also composited under any transparency. `--background`
+alone recolours the ordinary sheet's ground and letterbox. `explore --at-size ... --background
+...` adds `AT-SIZE-SHEET.png` beside `CONTACT-SHEET.png`, built by the same script, and builds
+it even for one roll. Both sheets honour EXIF orientation. Earned 2026-10-15 (#59): reader
+portraits shown at 64 px on paper could not be judged from 690 px cells on white, and the run
+hand-rolled a one-off script to render each direction at 64 and 240 px on #FBF5E7.
+
 **Binding an entity inherits its guard (v0.46).** A render made with `--entity` already
 carried the entity's `structured.invariants` into the PROMPT as positives. It did not carry
 them onto the checklist the OUTPUT is read back against: the pack's `gate` was the whole

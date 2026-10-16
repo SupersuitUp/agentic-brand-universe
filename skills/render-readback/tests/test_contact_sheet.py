@@ -202,5 +202,115 @@ class CoverTheWholeBatch(unittest.TestCase):
             self.assertIn("not a directory", r.stderr)
 
 
+class AtSizeOnTheSurfacesGround(unittest.TestCase):
+    """`--at-size` and `--background`: judge a set at the size and on the ground it will live on.
+
+    Issue #59, 2026-10-15. Reader portraits for a web book are shown at 64 px on #FBF5E7, and the
+    ordinary sheet shows them at 690 px on white, so a direction could not be judged where it
+    would be used. The run hand-rolled a script to render each set at 64 and 240 px on the paper.
+    These tests measure the pixels: each image's footprint must be EXACTLY the asked size, and
+    the ground must be EXACTLY the asked colour.
+    """
+    RED, BLUE = (220, 20, 20), (20, 20, 220)
+    PAPER = (0xFB, 0xF5, 0xE7)
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.d = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def img(self, name, size, colour, mode="RGB"):
+        p = self.d / name
+        Image.new(mode, size, colour).save(p)
+        return str(p)
+
+    def box(self, im, colour, tol=12):
+        px = im.convert("RGB").load()
+        w, h = im.size
+        xs, ys = [], []
+        for y in range(h):
+            for x in range(w):
+                r, g, b = px[x, y]
+                if abs(r - colour[0]) <= tol and abs(g - colour[1]) <= tol and abs(b - colour[2]) <= tol:
+                    xs.append(x); ys.append(y)
+        return (max(xs) - min(xs) + 1, max(ys) - min(ys) + 1, len(xs)) if xs else (0, 0, 0)
+
+    def sheet(self, *args):
+        out = self.d / "at-size.png"
+        r = _run(list(args) + ["--out", str(out)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return Image.open(out)
+
+    def test_each_image_appears_once_per_size_at_exactly_that_size(self):
+        a = self.img("a.png", (512, 512), self.RED)
+        sheet = self.sheet(a, "--at-size", "64", "--background", "#FBF5E7")
+        w, h, n = self.box(sheet, self.RED)
+        self.assertEqual((w, h), (64, 64))
+        self.assertGreaterEqual(n, 64 * 64 - 64)
+
+    def test_two_sizes_make_two_bands(self):
+        a = self.img("a.png", (300, 300), self.RED)
+        sheet = self.sheet(a, "--at-size", "64,240", "--background", "#FBF5E7")
+        _, _, n = self.box(sheet, self.RED)
+        self.assertAlmostEqual(n, 64 * 64 + 240 * 240, delta=300)
+
+    def test_the_longest_edge_is_the_size_and_aspect_survives(self):
+        a = self.img("wide.png", (400, 200), self.BLUE)
+        sheet = self.sheet(a, "--at-size", "64", "--background", "#FBF5E7")
+        w, h, _ = self.box(sheet, self.BLUE)
+        self.assertEqual((w, h), (64, 32))
+
+    def test_the_ground_is_the_asked_colour(self):
+        a = self.img("a.png", (100, 100), self.RED)
+        sheet = self.sheet(a, "--at-size", "64", "--background", "#FBF5E7")
+        self.assertEqual(sheet.convert("RGB").getpixel((1, 1)), self.PAPER)
+        self.assertEqual(sheet.convert("RGB").getpixel((sheet.size[0] - 2, sheet.size[1] - 2)),
+                         self.PAPER)
+
+    def test_transparency_shows_the_ground_not_black(self):
+        a = self.img("cut.png", (100, 100), (0, 0, 0, 0), mode="RGBA")
+        sheet = self.sheet(a, "--at-size", "64", "--background", "#FBF5E7")
+        _, _, n_black = self.box(sheet, (0, 0, 0), tol=4)
+        # labels are dark ink, but nowhere near a 64x64 block of it
+        self.assertLess(n_black, 64 * 64 // 4)
+
+    def test_background_alone_recolours_the_ordinary_sheet(self):
+        a = self.img("a.png", (100, 50), self.RED)
+        b = self.img("b.png", (50, 100), self.BLUE)
+        sheet = self.sheet(a, b, "--background", "#FBF5E7", "--no-label")
+        _, _, n_grey = self.box(sheet, (238, 238, 238), tol=2)
+        self.assertEqual(n_grey, 0, "the grey letterbox must take the asked ground")
+        self.assertEqual(sheet.convert("RGB").getpixel((0, 0)), self.PAPER)
+
+    def test_without_the_flags_nothing_changes(self):
+        a = self.img("a.png", (100, 50), self.RED)
+        b = self.img("b.png", (50, 100), self.BLUE)
+        sheet = self.sheet(a, b, "--no-label")
+        self.assertEqual(sheet.size, (690 * 2, 1380))
+        self.assertGreater(self.box(sheet, (238, 238, 238), tol=2)[2], 0)
+
+    def test_a_bad_colour_is_refused(self):
+        a = self.img("a.png", (10, 10), self.RED)
+        r = _run([a, "--out", str(self.d / "o.png"), "--background", "cream"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--background", r.stderr)
+        self.assertFalse((self.d / "o.png").exists())
+
+    def test_a_bad_size_is_refused(self):
+        a = self.img("a.png", (10, 10), self.RED)
+        for bad in ("0", "abc", "64,-1"):
+            r = _run([a, "--out", str(self.d / "o.png"), "--at-size", bad])
+            self.assertNotEqual(r.returncode, 0, bad)
+            self.assertIn("--at-size", r.stderr)
+
+    def test_the_at_size_sheet_still_refuses_a_partial_set(self):
+        a = self.img("a.png", (10, 10), self.RED)
+        r = _run([a, str(self.d / "ghost.png"), "--out", str(self.d / "o.png"), "--at-size", "64"])
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("ghost.png", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
