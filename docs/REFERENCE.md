@@ -91,10 +91,11 @@ answers questions about it, and refuses renders whose references do not exist on
 | `build-canon` | regenerate CANON.md from canon/properties + canon/crossovers |
 | `build-docs` | regenerate the framework's own derived docs (README + docs/REFERENCE.md) |
 | `check-kit` | refuse a surface whose source files use a no-go the kit can detect |
+| `check-share` | refuse a page with no share card of its own, or wearing another page's card (any site, no universe) |
 | `crossovers` | list the crossovers an entity appears in |
 | `elevation` | render an OBJECT's blueprint as a code-built 2D elevation sheet from a declarative spec (deterministic, no model, no cost) |
 | `import-asset` | bring an asset made OUTSIDE this universe INTO it, writing its provenance chain as a side effect of the copy |
-| `init` | scaffold a new universe (conforms to spec v0.62) |
+| `init` | scaffold a new universe (conforms to spec v0.63) |
 | `kit` | list the brand's pieces and no-gos (SPEC §13.1 kit records) |
 | `land` | merge a finished work branch home, or queue it if that is not safe yet |
 | `line-add` | add a golden line: a candidate, or golden when it arrives with --by and --verbatim |

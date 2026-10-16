@@ -1,6 +1,6 @@
 # Agentic Brand Universe — Cartridge Spec
 
-**v0.62 — 2026-10-15.** The version-controlled brand-universe (cartridge) format: the first-principles
+**v0.63 — 2026-10-16.** The version-controlled brand-universe (cartridge) format: the first-principles
 architecture for a brand as version-controlled canon + golden assets, agentically writable,
 composable, and evolvable, rendered into any deliverable. Home: `agenticbranduniverse.com`.
 Reference implementations: the Nation of Fire universe (storybooks) and Build on Anthropic (a
@@ -3103,6 +3103,19 @@ clean work, and a push guard can refuse exactly what the push introduces. A path
 range git refuses, is exit 2, never a silent pass. Earned when Gary asked that the Continental Works
 plugin refuse any push of a CW surface that had not consulted ABU, after a session restyled a page
 in a hand-picked shadow and a black ring that this gate now names.
+
+**`abu check-share <site> [--added <range>]` is the gate on how a site's pages unfurl (v0.63), and it
+needs no universe.** Every page must name a share card no other page names, or carry its own card file,
+because a page wearing another page's card unfurls AS that page however correct the card's bytes are.
+It reads Next.js App Router pages (`app/**/page.*`, metadata in the page or a sibling `layout.*`, a
+card named `shareCards.<key>` or a literal `/og/...png|jpg`, an `opengraph-image`/`twitter-image` file
+beside the page counting as its own) and plain HTML (`og:image`/`twitter:image` meta). A page that
+names no card is refused too: it would unfurl as the site default. `--added` judges only pages the
+range adds, so old shared cards never block new work; a range git refuses is exit 2. `Share-Waiver:
+<why>` in a commit in the range lets a deliberate exception through on the record. It cannot judge
+whether the card DEPICTS the page; that stays a look. Earned 2026-10-16 when
+continentalworks.ai/supersuit/computer shipped wearing /supersuit's card while every unfurl check
+passed (Gary: "worry more than tech specs", then "put this at the most general level possible").
 
 **`--baseline <file>` is the ratchet for a build that has no git history to diff** (a shallow CI
 clone). `--write-baseline <file>` records every current finding, keyed on file, rule, value and the

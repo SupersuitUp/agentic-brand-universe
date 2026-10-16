@@ -6,6 +6,7 @@ Agentic Brand Universe CLI.
   abu list-craft <universe>          # craft-canon records (spine/genre/register-rule/kit)
   abu kit <universe> [--json]        # the brand's pieces and no-gos (SPEC §13.1)
   abu check-kit <universe> <path>... # refuse a surface whose source uses a no-go
+  abu check-share <site>            # refuse a page that would not unfurl as itself (no universe needed)
   abu lines <universe> [--json]      # the brand's golden lines (SPEC §13.2)
   abu line-add <universe> --id I --name N --for F --text T --audience a,b   # a candidate, or golden with --by/--verbatim
   abu line-bless <universe> <id> --by B --verbatim V                        # a person's yes makes a candidate golden
@@ -75,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     ck.add_argument("--baseline", metavar="FILE", help="tolerate the findings recorded in FILE (paths relative to the cwd); refuse anything new")
     ck.add_argument("--write-baseline", metavar="FILE", help="record every current finding in FILE and exit 0")
     ck.add_argument("--report", action="store_true", help="when something is refused, print a pre-filled GitHub issue carrying the findings and the rules they broke")
+    cs = sub.add_parser("check-share", help="refuse a page with no share card of its own, or wearing another page's card (any site, no universe)")
+    cs.add_argument("site", help="the site's root (a git checkout)")
+    cs.add_argument("--added", metavar="RANGE", help="judge only pages this git range adds (e.g. origin/main..HEAD)")
+    cs.add_argument("--json", action="store_true")
     rp = sub.add_parser("report", help="file what ABU got wrong: prints (or --open opens) a pre-filled GitHub issue; nothing is sent until you press submit")
     rp.add_argument("what", help="what happened, in a sentence")
     rp.add_argument("--expected", default="", help="what it should have done, and why")
@@ -292,6 +297,27 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
+    # check-share needs no universe: it is a check on any site.
+    if args.cmd == "check-share":
+        from .share import check_share, describe
+        try:
+            hits, why = check_share(args.site, added=args.added)
+        except RuntimeError as e:
+            print(f"check-share: {e}")
+            return 2
+        if args.json:
+            print(json.dumps({"findings": hits, "waiver": why}, indent=2))
+            return 1 if hits else 0
+        for h in hits:
+            print(describe(h))
+        if why:
+            print(f"check-share: waived in the commit: {why}")
+        elif hits:
+            print(f"check-share: {len(hits)} page(s) would not unfurl as themselves")
+            print("  Give each its own share card (a card of its own, never another page's). Deliberate? Add `Share-Waiver: <why>` to a commit in the range.")
+        else:
+            print("check-share: every page judged has a card of its own. Whether the card SHOWS the page is still a look.")
+        return 1 if hits else 0
 
     if args.cmd == "report":
         from .report import body, issue_url

@@ -3,6 +3,14 @@
 The npm package `@supersuit/abu` is the ABU engine at the same version as the `abu` Claude plugin;
 both are released by one `vX.Y.Z` tag. The full record of every version is [SAVE-LOG.md](./SAVE-LOG.md).
 
+## 1.48.0 (2026-10-16)
+
+- `abu check-share <site> [--added <range>]`: refuses a page that would not unfurl as itself, one that
+  names no share card or wears another page's card. Any site, no universe needed (Next.js App Router
+  and plain HTML). `--added` judges only new pages; `Share-Waiver: <why>` in a commit lets a
+  deliberate exception through. Earned when continentalworks.ai/supersuit/computer shipped wearing
+  /supersuit's card while every size and URL check passed. SPEC v0.63.
+
 ## 1.46.0 (2026-10-14)
 
 - Every ABU skill now ends by offering to report a misfire, not just the front door. The step is one
