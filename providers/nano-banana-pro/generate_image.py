@@ -33,11 +33,21 @@ except Exception:  # never block a render on a missing guard module
 
 
 
-def get_api_key(provided_key: str | None) -> str | None:
-    """Get API key from argument first, then environment."""
-    if provided_key:
-        return provided_key
-    return os.environ.get("GEMINI_API_KEY")
+# THE KEY: flag, then environment, then the operator's credentials file (issue #61). One
+# reader for every provider, in providers/_shared/credentials.py; never print the value.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+from credentials import missing_message, resolve_key  # noqa: E402
+
+
+def get_api_key(provided_key: str | None) -> str:
+    """The key from --api-key, the environment, or the credentials file; exits naming both."""
+    key, source = resolve_key("GEMINI_API_KEY", provided_key)
+    if not key:
+        print(missing_message("GEMINI_API_KEY"), file=sys.stderr)
+        sys.exit(1)
+    if source not in ("--api-key", "environment"):
+        print(f"[key] GEMINI_API_KEY read from {source}", file=sys.stderr)
+    return key
 
 
 def main():
@@ -68,7 +78,8 @@ def main():
     )
     parser.add_argument(
         "--api-key", "-k",
-        help="Gemini API key (overrides GEMINI_API_KEY env var)"
+        help="Gemini API key. Otherwise GEMINI_API_KEY from the environment, then from "
+             "~/.agents/.env/credentials.env ($ABU_CREDENTIALS_FILE)"
     )
 
     args = parser.parse_args()
@@ -82,12 +93,6 @@ def main():
 
     # Get API key
     api_key = get_api_key(args.api_key)
-    if not api_key:
-        print("Error: No API key provided.", file=sys.stderr)
-        print("Please either:", file=sys.stderr)
-        print("  1. Provide --api-key argument", file=sys.stderr)
-        print("  2. Set GEMINI_API_KEY environment variable", file=sys.stderr)
-        sys.exit(1)
 
     # Import here after checking API key to avoid slow import on error
     from google import genai

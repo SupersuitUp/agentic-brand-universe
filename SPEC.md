@@ -1781,6 +1781,14 @@ removes that step.
   provider adapter (`gpt-image-2` today, others behind the same interface). The adapter normalizes the
   *call*; per-provider reference-conditioning and moderation (e.g. a `public-figure` block) remain
   provider facts, not framework facts.
+- **The provider finds its own key (v0.62).** Each provider reads its key from `--api-key`, then
+  the environment (`OPENAI_API_KEY`, `GEMINI_API_KEY`), then the same variable in the operator's
+  credentials file (`$ABU_CREDENTIALS_FILE`, default `~/.agents/.env/credentials.env`), through one
+  reader, `providers/_shared/credentials.py`. It reads only the one variable by exact name, never
+  prints a value, and says where a key came from only when it came from the file. Missing in all
+  three, it exits naming the variable and the file. `explore` prints the failing line of a roll's
+  log beside `FAIL <id>`. Earned 2026-10-15 (#61): the first explore render failed with no image
+  because the key lived only in the credentials file, and the reason sat in a log nobody opened.
 - **Determinism ceiling (invariant):** the compiler makes the *input* deterministic; the model output
   stays stochastic. A compiled prompt is necessary, not sufficient — the read-back gate (§3.5) is
   still mandatory, and a drift-prone shape is guaranteed by *passing its reference image*, never by

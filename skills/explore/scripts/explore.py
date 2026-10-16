@@ -35,6 +35,24 @@ def parse_variants(path):
         sys.exit("duplicate variant ids")
     return out
 
+def failure_reason(log):
+    """The line of a failed roll's log that says WHY, or None.
+
+    A roll's output goes to `<id>.log`, so a failure used to print `FAIL <id>` and nothing
+    else. On 2026-10-15 (issue #61) the reason was a missing OPENAI_API_KEY, stated plainly
+    in the log and invisible at the point anyone was looking. Prefer a line that reads as an
+    error; otherwise the last non-empty line, which is where a provider says it gave up.
+    """
+    try:
+        lines = [l.strip() for l in pathlib.Path(log).read_text(errors="replace").splitlines()
+                 if l.strip()]
+    except OSError:
+        return None
+    for l in lines:
+        if l.lower().startswith("error"):
+            return l[:300]
+    return lines[-1][:300] if lines else None
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--subject-file", required=True, help="the INVARIANT half of the prompt")
@@ -108,7 +126,11 @@ def main():
         for vid, rc in ex.map(run, jobs):
             ok = rc == 0 and (out / f"{vid}.png").exists()
             print(f"  {'ok  ' if ok else 'FAIL'} {vid}")
-            if not ok: failed.append(vid)
+            if not ok:
+                failed.append(vid)
+                why = failure_reason(out / f"{vid}.log")
+                if why:
+                    print(f"       {why}")
 
     print(f"\n[explore] staged in {out}")
     print("[explore] every roll is KEPT. A render is not reproducible; never delete a candidate.")

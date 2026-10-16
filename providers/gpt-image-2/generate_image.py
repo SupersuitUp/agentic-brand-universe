@@ -58,11 +58,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from prompt_guards import apply_prompt_guards  # noqa: E402
 
 
+# THE KEY: flag, then environment, then the operator's credentials file (issue #61). One
+# reader for every provider, in providers/_shared/credentials.py; never print the value.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+from credentials import missing_message, resolve_key  # noqa: E402
+
+
 def get_api_key(provided: str | None) -> str:
-    key = provided or os.environ.get("OPENAI_API_KEY")
+    key, source = resolve_key("OPENAI_API_KEY", provided)
     if not key:
-        print("Error: OPENAI_API_KEY not set. Pass --api-key or set the env var.")
+        print(missing_message("OPENAI_API_KEY"), file=sys.stderr)
         sys.exit(1)
+    if source not in ("--api-key", "environment"):
+        print(f"[key] OPENAI_API_KEY read from {source}", file=sys.stderr)
     return key
 
 
@@ -138,7 +146,8 @@ def main() -> None:
                              "Transparent works at every quality tier as of 2026-09-09, verified on "
                              "gpt-image-2.5-flare and gpt-image-2 at --quality low: real alpha, no halo. "
                              "It used to 400 outright, and older notes still say so.")
-    parser.add_argument("--api-key", help="OpenAI API key (or set OPENAI_API_KEY env var)")
+    parser.add_argument("--api-key", help="OpenAI API key. Otherwise OPENAI_API_KEY from the environment, "
+                        "then from ~/.agents/.env/credentials.env ($ABU_CREDENTIALS_FILE)")
     parser.add_argument("--timeout", type=float, default=300.0,
                         help="Per-attempt HTTP timeout in seconds (default 300). The OpenAI SDK "
                              "defaults to 600s with 2 retries, so a stalled image call burns ~30 "

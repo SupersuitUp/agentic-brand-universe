@@ -100,5 +100,31 @@ class ContactSheetIsEmittedForEveryFanOut(unittest.TestCase):
         self.assertIn('(out / f"{vid}.png").exists()', src,
                       "a failed variant has no png; sheeting it would crash the sheet builder")
 
+
+class AFailedRollSaysWhy(unittest.TestCase):
+    """`FAIL <id>` alone hid a missing API key in a log nobody opened (issue #61)."""
+
+    def _reason(self, text):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("explore_mod", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        with tempfile.TemporaryDirectory() as td:
+            log = pathlib.Path(td) / "a.log"
+            if text is not None:
+                log.write_text(text)
+            return mod.failure_reason(log)
+
+    def test_the_error_line_is_surfaced(self):
+        why = self._reason("[generate] model not specified\nError: OPENAI_API_KEY is not set. "
+                           "It is not in the environment\ngenerate.py: generation FAILED\n")
+        self.assertIn("OPENAI_API_KEY", why)
+
+    def test_otherwise_the_last_line(self):
+        self.assertEqual(self._reason("a\nb\n\n"), "b")
+
+    def test_no_log_is_no_reason(self):
+        self.assertIsNone(self._reason(None))
+
 if __name__ == "__main__":
     unittest.main()
