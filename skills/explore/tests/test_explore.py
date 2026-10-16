@@ -162,5 +162,20 @@ class AtSizeSheet(unittest.TestCase):
         r = dry_run(["--at-size", "64,240", "--background", "#FBF5E7"])
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
+
+class UseReachesEveryRoll(unittest.TestCase):
+    """A scoped pack refuses a render with no --use (SPEC v0.62), so explore must forward it."""
+
+    def test_use_is_forwarded(self):
+        r = dry_run(["--style-pack", "/p", "--use", "book:reader-portraits"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        rolls = [l for l in r.stdout.splitlines() if l.strip().startswith(("a-one:", "b-two:"))]
+        self.assertEqual(len(rolls), 2)
+        for l in rolls:
+            self.assertIn("--use book:reader-portraits", l)
+
+    def test_no_use_adds_nothing(self):
+        self.assertNotIn("--use", dry_run([]).stdout)
+
 if __name__ == "__main__":
     unittest.main()

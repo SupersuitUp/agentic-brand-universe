@@ -18,8 +18,70 @@ Usage:
     --max-elements 5 \\
     [--require-entity <canon-entity-id> ...] (SPEC 4.7 requiredEntities: a render in this
                                               pack must bind each via --entity or it refuses)
+
+FROM AN EXPLORE PICK (SPEC v0.62, issue #60): instead of --anchor/--ref, name the explore
+output and the direction the operator picked. Every subject's picked roll becomes a ref
+(byte-identical, its recipe beside it, named for the subject), each is blessed by whoever
+picked, and pack.json records the pick, the directions considered and the decision:
+
+  python3 scaffold.py --dir <pack> --id <id> --name "<name>" --style-line ... --gate ... \\
+    --text-policy none --from-explore <explore-out-dir> --pick A-ascent-poster \\
+    --decided-by "<who>" [--decided-on YYYY-MM-DD] --verbatim "<their words>" \\
+    [--scope-use <book>:<role> ...] [--scope-subjects "..."] [--scope-never "..."]
+
+<explore-out-dir> is one explore run (`<id>.png` files) or a folder of runs, one per subject
+(`<subject>/<id>.png`). --scope-use writes the pack's TYPED scope, which generate.py enforces.
 """
-import argparse, hashlib, json, os, shutil, sys
+import argparse, datetime, hashlib, json, os, shutil, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bless_ref  # noqa: E402  (one writer of a blessing marker)
+
+# Files an explore run writes that are not directions: the sheets.
+_SHEETS = ("contact-sheet", "contact_sheet", "at-size-sheet", "sheet", "montage")
+
+
+def _variants(d):
+    """The direction ids in one explore run: its pngs, minus the sheets."""
+    return sorted(os.path.splitext(n)[0] for n in os.listdir(d)
+                  if n.lower().endswith(".png") and not any(t in n.lower() for t in _SHEETS))
+
+
+def explore_picks(dirs, pick):
+    """`([(src, dest-name)], considered)` for `pick` across explore runs, or exits naming why.
+
+    A run is a dir holding `<id>.png`; a dir holding none but containing runs is a folder of
+    runs, one per subject, and each subject's pick is named for the subject. A subject missing
+    the pick is REFUSED by name: a pack built from two of three picks reads as all three.
+    """
+    runs = []
+    for d in dirs:
+        d = os.path.abspath(os.path.expanduser(d))
+        if not os.path.isdir(d):
+            sys.exit(f"scaffold: --from-explore {d} is not a directory")
+        if _variants(d):
+            runs.append((d, None))
+            continue
+        subs = [os.path.join(d, n) for n in sorted(os.listdir(d))
+                if os.path.isdir(os.path.join(d, n)) and _variants(os.path.join(d, n))]
+        if not subs:
+            sys.exit(f"scaffold: --from-explore {d} holds no explore roll (<id>.png) and no "
+                     f"folder of runs")
+        runs += [(s, os.path.basename(s)) for s in subs]
+    considered, out, absent = [], [], []
+    for d, subject in runs:
+        have = _variants(d)
+        considered += [v for v in have if v not in considered]
+        src = os.path.join(d, pick + ".png")
+        if os.path.exists(src):
+            out.append((src, subject))
+        else:
+            absent.append(f"{subject or d}: has {', '.join(have)}")
+    if absent:
+        sys.exit(f"scaffold: --pick {pick!r} is missing from " + str(len(absent))
+                 + " run(s), refusing a partial promotion:\n  " + "\n  ".join(absent))
+    one = len(out) == 1
+    return [(src, (pick if one or not subj else subj) + ".png") for src, subj in out], considered
 
 def _sha256(p):
     h = hashlib.sha256()
@@ -46,7 +108,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True)
     ap.add_argument("--id", required=True); ap.add_argument("--name", required=True)
-    ap.add_argument("--anchor", required=True)
+    ap.add_argument("--anchor", default=None,
+                    help="REQUIRED unless --from-explore, where it defaults to the first pick")
     ap.add_argument("--ref", action="append", default=[])
     ap.add_argument("--style-line", required=True)
     ap.add_argument("--palette-ground", default=""); ap.add_argument("--palette-fill", default=""); ap.add_argument("--palette-line", default="")
@@ -67,7 +130,45 @@ def main():
     ap.add_argument("--require-entity", action="append", default=[], metavar="ID",
                     help="Canon entity id this pack's law depends on (e.g. north-star-cross). "
                          "generate.py refuses a render in the pack that does not bind it.")
+    # FROM AN EXPLORE PICK, and the decision behind it (SPEC v0.62, #60).
+    ap.add_argument("--from-explore", action="append", default=[], metavar="DIR",
+                    help="an explore output dir (or a folder of them, one per subject); "
+                         "with --pick, promotes the picked roll of each as a ref")
+    ap.add_argument("--pick", default=None, metavar="ID", help="the explore direction picked")
+    ap.add_argument("--decided-by", default=None, help="who picked / decided the scope")
+    ap.add_argument("--decided-on", default=None, help="YYYY-MM-DD (default: today)")
+    ap.add_argument("--verbatim", action="append", default=[],
+                    help="their words, verbatim (repeatable); recorded with the decision")
+    ap.add_argument("--scope-use", action="append", default=[], metavar="ID",
+                    help="a use this pack may render for (repeatable); writes a TYPED scope "
+                         "that generate.py enforces with --use")
+    ap.add_argument("--scope-subjects", default=None, help="who or what the pack may depict")
+    ap.add_argument("--scope-never", action="append", default=[],
+                    help="what it must never depict (repeatable)")
     a = ap.parse_args()
+
+    decided_on = a.decided_on or datetime.date.today().isoformat()
+    try:
+        datetime.date.fromisoformat(decided_on)
+    except ValueError:
+        sys.exit(f"scaffold: --decided-on {decided_on!r} is not YYYY-MM-DD")
+    if (a.from_explore or a.pick) and not (a.from_explore and a.pick):
+        sys.exit("scaffold: --from-explore and --pick go together (which runs, which direction)")
+    if a.from_explore and not a.decided_by:
+        sys.exit("scaffold: a pick needs --decided-by (who picked). The promoted refs are "
+                 "blessed in their name, and a blessing with nobody behind it is not one.")
+    if a.scope_use and not (a.decided_by and a.verbatim):
+        sys.exit("scaffold: --scope-use needs --decided-by and --verbatim: a scope is a "
+                 "decision, recorded as who, when and their words (SPEC v0.62).")
+    picked, considered, named = [], [], {}
+    if a.from_explore:
+        picked, considered = explore_picks(a.from_explore, a.pick)
+        named = {os.path.abspath(src): dest for src, dest in picked}
+        if not a.anchor:
+            a.anchor = picked[0][0]
+    if not a.anchor:
+        sys.exit("scaffold: --anchor is required (or --from-explore with --pick)")
+    a.ref = [src for src, _ in picked] + a.ref
 
     if not a.gate:
         sys.exit("scaffold: a Style Pack MUST have >=1 --gate assertion (a gateless pack is a mood board)")
@@ -93,8 +194,9 @@ def main():
     ref_rel = []
     anchor_rel = None
     unprovenanced = []
+    promoted = {}
     for i, src in enumerate(src_list):
-        base = os.path.basename(src)
+        base = named.get(src) or os.path.basename(src)
         # keep basenames unique inside the pack
         dest = os.path.join(refs_dir, base)
         n = 1
@@ -127,6 +229,8 @@ def main():
                 shutil.copy2(blessing, dest + ".blessed.json")
         rel = os.path.relpath(dest, pack)
         ref_rel.append(rel)
+        if src in named:
+            promoted[rel] = src
         if i == 0: anchor_rel = rel
 
     palette = {}
@@ -146,6 +250,18 @@ def main():
         "maxElements": a.max_elements,
         **({"requiredEntities": [x.strip() for x in a.require_entity if x.strip()]} if a.require_entity else {}),
     }
+    decided = {"by": a.decided_by, "on": decided_on, "verbatim": list(a.verbatim)}
+    if a.scope_use:
+        manifest["scope"] = {"uses": list(dict.fromkeys(a.scope_use)),
+                             **({"subjects": a.scope_subjects} if a.scope_subjects else {}),
+                             **({"never": list(a.scope_never)} if a.scope_never else {}),
+                             "decided": decided}
+    if promoted:
+        manifest["promotedFrom"] = {
+            "explore": [os.path.relpath(os.path.abspath(os.path.expanduser(d)), pack)
+                        for d in a.from_explore],
+            "pick": a.pick, "considered": considered, "decided": decided,
+            "refs": {r: os.path.relpath(s, pack) for r, s in promoted.items()}}
     with open(os.path.join(pack, "pack.json"), "w") as f:
         json.dump(manifest, f, indent=2)
 
@@ -153,6 +269,22 @@ def main():
     for r in ref_rel:
         if not os.path.exists(os.path.join(pack, r)): sys.exit(f"scaffold: ref did not land: {r}")
     if anchor_rel not in ref_rel: sys.exit("scaffold: anchor must be one of refs")
+
+    # THE PICK IS A BLESSING. Whoever picked looked at these exact bytes and chose them, so
+    # each promoted ref is blessed in their name through bless_ref's own writer (bound to the
+    # sha256). A rebuild over the same bytes keeps the existing blessing; changed bytes
+    # replace it, keeping the previous approver under `replaced`.
+    if promoted:
+        by = f"{a.decided_by}, {decided_on}"
+        words = "; ".join(f"'{v}'" for v in a.verbatim)
+        note = (f"picked explore direction {a.pick!r}" + (f" ({words})" if words else "")
+                + (f" over {', '.join(c for c in considered if c != a.pick)}"
+                   if len(considered) > 1 else ""))
+        for rel in promoted:
+            state, _m = bless_ref.state_of(pack, rel)
+            if state == "blessed":
+                continue
+            bless_ref.cmd_bless(pack, manifest, rel, by, note, rebless=state != "unblessed")
     if unprovenanced:
         print(f"  WARNING: {len(unprovenanced)} ref(s) copied with NO recipe sidecar: "
               f"{', '.join(unprovenanced)}. These are un-auditable: no divergence check can\n"

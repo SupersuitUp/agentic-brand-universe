@@ -146,7 +146,11 @@ approval will not transfer to it. Copy the blessed file into canon as-is.
 An explore that ends in a picture and no canon change was a conversation, not a decision.
 Close it:
 
-1. Copy the winner into the entity's sheet, or into a style pack's refs.
+1. Copy the winner into the entity's sheet, or into a style pack's refs. For a pack, never copy
+   by hand: `create-style-pack/scripts/scaffold.py --from-explore <out-dir> --pick <id>
+   --decided-by "<who>" --verbatim "<their words>"` promotes the picked roll of every subject,
+   blesses each, and records the pick (SPEC §4.7 v0.62). A look picked for some uses only gets
+   `--scope-use`, and a different medium from the register also gets a register exception.
 2. Write what won into the entity's `invariants` and `render.always`, so the next render
    inherits it instead of depending on someone remembering this thread.
 3. Add a gate assertion for anything that could silently regress (a finish, a proportion, a

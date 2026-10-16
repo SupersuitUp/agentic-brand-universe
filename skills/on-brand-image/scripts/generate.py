@@ -457,6 +457,11 @@ def main():
     # references, bakes the entity's live invariants into the prompt as positives,
     # and REFUSES the render if a required sheet is missing from disk.
     ap.add_argument("--entity", action="append", default=[], metavar="UNIVERSE:ID[@LOOK]")
+    # SCOPE (SPEC v0.62, #60). A pack with a typed `scope`, or one a register exception names,
+    # renders only for the uses it lists; the render says which one it is for.
+    ap.add_argument("--use", default=None, metavar="ID",
+                    help="Which use this render is for (e.g. a-book:reader-portraits). Required "
+                         "by a style pack with a typed scope; recorded in the recipe either way.")
     ap.add_argument("--waive-entity", action="append", default=[], metavar="ID",
                     help="Lift a style pack's requiredEntities entry for THIS render only, "
                          "for a render that genuinely carries no instance of it. Recorded "
@@ -507,6 +512,11 @@ def main():
         sys.exit("generate.py: --permit needs --style-pack. Permits lift a pole from a "
                  "pack's rejectedPoles, and with no pack there are no poles to lift.")
 
+    if a.use and not a.style_pack:
+        sys.exit("generate.py: --use needs --style-pack. A use is checked against a pack's "
+                 "scope, and with no pack there is nothing to check it against.")
+
+    use_record = {}
     if a.style_pack:
         pack_dir = os.path.expanduser(a.style_pack)
         pack_file = (pack_dir if pack_dir.endswith(".json")
@@ -519,6 +529,12 @@ def main():
 
         # requiredEntities (SPEC 4.7): refuse before spending a render.
         problem = required_entity_problem(pack, a.entity, a.waive_entity)
+        if problem:
+            sys.exit(problem)
+        # scope + register exception (SPEC v0.62): refuse an unlisted use before spending.
+        _engine_on_path()
+        from agenticstory.scope import use_gate
+        problem, use_record = use_gate(pack, pack_dir, a.use)
         if problem:
             sys.exit(problem)
 
@@ -786,6 +802,9 @@ def main():
             recipe["waivedEntities"] = [w.strip() for w in a.waive_entity if w.strip()]
         if a.ref_first:
             recipe["refFirst"] = True
+        # The use this render was for and, when a register exception governs the pack, which
+        # one and who decided it: a render made under an exception must say so.
+        recipe.update(use_record)
     # Output geometry belongs in provenance. It was forwarded to the provider and never
     # recorded, so a recipe could not say whether a plate was shot portrait or landscape,
     # and a reader measuring the file could not tell an intended aspect from a provider

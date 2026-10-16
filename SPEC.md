@@ -1,10 +1,27 @@
 # Agentic Brand Universe — Cartridge Spec
 
-**v0.61 — 2026-10-13.** The version-controlled brand-universe (cartridge) format: the first-principles
+**v0.62 — 2026-10-15.** The version-controlled brand-universe (cartridge) format: the first-principles
 architecture for a brand as version-controlled canon + golden assets, agentically writable,
 composable, and evolvable, rendered into any deliverable. Home: `agenticbranduniverse.com`.
 Reference implementations: the Nation of Fire universe (storybooks) and Build on Anthropic (a
 documentation brand: explanatory plates, ink-line illustration, share cards, a slide deck).
+
+> **v0.62 changelog — where a look may be used, typed; an explore pick becomes a pack in one
+> command; a set is judged at its real size; a provider finds its own key.** §4.7: a Style Pack's
+> `scope` is now TYPED, `{uses, subjects?, never?, decided {by, on, verbatim}}`; a prose scope
+> fails `validate`, and `generate.py` refuses a render through a scoped pack unless `--use <id>`
+> names one of its `uses` (recorded in the recipe). §11: `identity.register.exceptions[]` holds
+> a register's MEDIUM exception, `{id, medium, stylePack, uses, decided, subjects?, why?}`;
+> `validate` refuses one with no who, when or verbatim words, a pack that does not exist, or a
+> pack whose scope does not cover the exception's uses, and a render through that pack carries
+> `registerException` in its recipe. `create-style-pack --from-explore <dir> --pick <id>
+> --decided-by ...` promotes every subject's picked roll byte-identical with its recipe, blesses
+> each in the picker's name, and records `promotedFrom` (pick, directions considered, decision);
+> `--scope-use` writes the typed scope. §3.5: `contact_sheet.py --at-size --background` and
+> `explore --at-size --background` (AT-SIZE-SHEET.png). §4.6: providers read their key from the
+> environment, then `~/.agents/.env/credentials.env`. Earned 2026-10-15 on continental-works
+> (#59, #60, #61), making three made-up readers' portraits: the pick, its scope and its register
+> exception could only be written as prose no gate read.
 
 > **v0.61 changelog — the LINES: a universe holds its brand's approved language, with every
 > wording it has had.** §13.2: a craft-canon record of the new kind `lines` names its `approvers`
@@ -2191,6 +2208,38 @@ them" — which has no recurring-identity requirement and therefore no need for 
   blessed a third by name there was no verb to record it with, and the framework's two existing
   blessing primitives (`--bless-seed`, `abu import-asset --blessed-by`) are entity-scoped and
   import-scoped respectively and neither takes a pack.
+- **`scope` (v0.62, optional): which uses a pack may render for, typed so a gate can read it.**
+
+  ```jsonc
+  "scope": {
+    "uses": ["superskills-from-zero:reader-portraits"],   // REQUIRED: the only uses allowed
+    "subjects": "the book's made-up readers",              // optional, for people
+    "never": ["a real person", "a brand picture"],         // optional, for people
+    "decided": {"by": "Gary Sheng", "on": "2026-10-15", "verbatim": ["A · Ascent poster"]}
+  }
+  ```
+
+  A pack with a `scope` renders only when the caller says which use the render is for:
+  `generate.py --use <id>` (and `explore --use`, which forwards it). No `--use`, or one the scope
+  does not list, REFUSES before any provider is called, naming the allowed uses; the recipe
+  records `use`. `validate` refuses a malformed scope, including the PROSE scope every pack had
+  before v0.62 (keep the sentence as `subjects`). A use id is the universe's own choice
+  (`<book-or-site>:<role>` reads well) and is not `identity.surfaces`, which names colour roles.
+  A pack with no `scope` is unchanged: `--use` is optional and recorded when given. When a
+  register exception (§11) names the pack, its `uses` gate the render too and the recipe carries
+  `registerException` {id, medium, decided}. Earned 2026-10-15 (#60): an illustrated look picked
+  for one book's three made-up readers sat in a photographic universe with its scope written as a
+  sentence, so nothing stopped it rendering anything for anyone.
+- **From an explore pick, in one command (v0.62).** `create-style-pack/scripts/scaffold.py
+  --from-explore <dir> --pick <direction> --decided-by <who> [--decided-on] --verbatim <words>`
+  takes one explore run (`<id>.png`) or a folder of runs, one per subject (`<subject>/<id>.png`),
+  and promotes every subject's picked roll: byte-identical, its `.recipe.json` beside it, named
+  for the subject, each BLESSED (§4.7 v0.41 marker) in the picker's name. A subject missing the
+  pick is refused by name, never promoted partially. `pack.json` records `promotedFrom`
+  {explore, pick, considered (every direction the runs held, sheets excluded), decided, refs
+  (each ref's source)}. `--scope-use <id>` (with `--scope-subjects`, `--scope-never`) writes the
+  typed scope from the same decision. The drafts stay where explore wrote them; move the run
+  into `works/` if it should outlive the scratchpad.
 - **The gate is the load-bearing half.** A pack without a `gate` is a mood board. The gate is what
   turns "looks roughly right" into a checkable read-back (§3.5): generate, verify each assertion
   against the pixels, re-roll the specific failure. The finger-count defect is a gate concern, not a
@@ -2802,6 +2851,33 @@ points at a content-neutral **style anchor** the renderer passes as the first re
 render, with `rejectedPoles` baked as negatives. A per-property `register` (SPEC §4.3) may still
 override it. `start-new-story-universe` defaults `register.name` to "detailed comic book" and locks
 the anchor via a style-lock step.
+
+**`register.exceptions` (v0.62, optional): a different MEDIUM, allowed for named uses only.** A
+register is one style for the whole universe, and sometimes the right answer for one use is
+another medium altogether: made-up people drawn so they never pass for real ones, inside a
+universe of photographs. That is an exception to the register, and it is recorded on the
+register, typed, so it can be checked rather than remembered:
+
+```jsonc
+"exceptions": [{
+  "id": "reader-portraits",
+  "medium": "flat 1970s screen-print illustration",         // the medium allowed instead
+  "stylePack": "reference/style/ascent-poster",             // the look it renders through
+  "uses": ["superskills-from-zero:reader-portraits"],       // the only uses it covers
+  "decided": {"by": "Gary Sheng", "on": "2026-10-15",
+              "verbatim": ["Illustrated, in the CW look", "A · Ascent poster"]},
+  "subjects": "the book's made-up readers", "why": "a photograph of a made-up person passes for a real one"
+}]
+```
+
+`validate` refuses an exception missing its id, medium, uses, or any of who, when and the
+verbatim words; one whose `stylePack` does not exist; one whose pack has no typed `scope` (§4.7),
+since nothing would then keep the pack inside the exception; and one whose `uses` the pack's
+scope does not cover, because two records of one decision must agree. A render through the pack
+must pass `--use` with a covered use, and its recipe records `registerException`. Every other
+render keeps the register in full. Before v0.62 these lived as notes in craft records
+(`exceptions` beside a register-rule), which nothing read; the per-ENTITY lighting exception
+(`structured.registerNeutral`, §12) is a different thing and is unchanged.
 
 **`register.anchorSubject` (optional).** When the anchor is not perfectly content-neutral, this
 field NAMES what it depicts, so a renderer can ban that subject concretely on every render. The

@@ -29,6 +29,34 @@ Turn a blessed set of images into a **Style Pack** (SPEC §4.7): `pack.json` + `
   Before writing a pole, ask what it forbids besides the thing you dislike.
 - **Gate assertions** — the read-back checklist `on-brand-image` verifies against the pixels. This is the load-bearing half; a pack without a gate is a mood board, and the scaffolder refuses to write one.
 
+## From an explore pick (the usual way a pack is born)
+
+When the look was chosen in `explore`, promote the pick with one command instead of copying
+files by hand:
+
+```bash
+python3 ~/.../skills/create-style-pack/scripts/scaffold.py \
+  --dir <universe>/reference/style/<pack-id> --id <pack-id> --name "<Name>" \
+  --from-explore <explore-out-dir> --pick <direction-id> \
+  --decided-by "<who picked>" [--decided-on YYYY-MM-DD] --verbatim "<the words they used>" \
+  [--scope-use <book-or-site>:<role> --scope-subjects "<who it may depict>" --scope-never "<never>"] \
+  --style-line "..." --reject ... --gate ... --text-policy none
+```
+
+`<explore-out-dir>` is one run or a folder of runs, one per subject. Every subject's picked roll
+becomes a ref named for the subject, byte-identical with its recipe, and is BLESSED in the
+picker's name; `pack.json` records `promotedFrom` (the pick, every direction considered, the
+decision). A subject missing the pick is refused by name. Add `--ref` to reach the 3-8 a pack
+needs, and `--anchor` if the first pick should not be the anchor.
+
+**If the look is for some uses only, give it a scope** (`--scope-use`, repeatable). It is typed
+(SPEC §4.7 v0.62): `generate.py` then refuses a render through the pack that does not say
+`--use` with one of them. A look in a DIFFERENT MEDIUM from the universe's register (an
+illustration inside a photographic universe) is also an exception to the register: record it in
+`universe.json` `identity.register.exceptions` (SPEC §11: id, medium, stylePack, uses, decided
+by/on/verbatim, why), with the same uses, or `validate` refuses. Never write a scope as a
+sentence; keep the sentence as `--scope-subjects`.
+
 ## Procedure
 
 1. **Gather + bless the refs.** Only images a human approved. If the anchor is not content-neutral, generate a content-neutral swatch first (palette + light + finish, no subject) and use that as `anchor`.

@@ -99,6 +99,9 @@ def main():
     p.add_argument("--no-wardrobe", action="store_true",
                    help="skip the adapter's automatic wardrobe resolution from --entity; use "
                         "when the axis under study IS the wardrobe")
+    p.add_argument("--use", default=None, metavar="ID",
+                   help="the use these rolls are for; required by a style pack with a typed "
+                        "scope (SPEC v0.62) and passed to every roll")
     p.add_argument("--size", default="1024x1024")
     # NO DEFAULT. Omitted, the model is resolved by the provider adapter, which owns it.
     # This flag did not exist until 2026-09-12, and its absence is how a day of exploration
@@ -133,6 +136,7 @@ def main():
                "--prompt-file", str(ptxt), "--size", a.size, "--quality", a.quality, "--no-open"]
         if a.model: cmd += ["--model", a.model]
         if a.style_pack: cmd += ["--style-pack", os.path.expanduser(a.style_pack)]
+        if a.use: cmd += ["--use", a.use]
         for r in a.ref: cmd += ["--ref", os.path.expanduser(r)]
         if a.ref_first: cmd.append("--ref-first")
         for e in a.entity: cmd += ["--entity", os.path.expanduser(e)]

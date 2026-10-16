@@ -1307,5 +1307,61 @@ class TestReferenceImplementation(GenerateCase):
         self.assertIn("ZERO reference sheets", msg)
 
 
+
+# =====================================================================
+# A scoped pack and a register's medium exception gate the RENDER (SPEC v0.62, #60)
+# =====================================================================
+class TestScopedPackNeedsAUse(GenerateCase):
+    """A pack's typed `scope` (and any register exception naming the pack) refuses a render
+    whose `--use` it does not allow, before the provider is called; the recipe records the use
+    and the exception with who decided it. Earned 2026-10-15: an illustrated look scoped to one
+    book's made-up readers sat in a photographic universe with its scope written as prose."""
+
+    USE = "superskills-from-zero:reader-portraits"
+    DECIDED = {"by": "Gary Sheng", "on": "2026-10-15", "verbatim": "A · Ascent poster"}
+
+    def scoped(self, with_exception=False):
+        uni = self.tmp / "uni"
+        pack = make_pack(uni / "reference" / "style", name="ascent-poster")
+        pj = Path(pack) / "pack.json"
+        m = json.loads(pj.read_text())
+        m["scope"] = {"uses": [self.USE], "decided": self.DECIDED}
+        pj.write_text(json.dumps(m))
+        if with_exception:
+            (uni / "universe.json").write_text(json.dumps({"id": "u", "identity": {"register": {
+                "name": "film photography", "exceptions": [{
+                    "id": "reader-portraits", "medium": "flat screen-print illustration",
+                    "stylePack": "ascent-poster", "uses": [self.USE],
+                    "decided": self.DECIDED}]}}}))
+        return pack
+
+    def test_no_use_refuses_before_the_provider(self):
+        msg = self.expect_exit(*self.base("--style-pack", self.scoped()))
+        self.assertIn("--use", msg)
+        self.assertIn(self.USE, msg)
+        self.assertEqual(self.calls, [], "the provider must never be reached")
+
+    def test_a_use_outside_scope_refuses(self):
+        msg = self.expect_exit(*self.base("--style-pack", self.scoped(), "--use", "home:hero"))
+        self.assertIn("home:hero", msg)
+        self.assertEqual(self.calls, [])
+
+    def test_an_allowed_use_renders_and_is_recorded_with_its_exception(self):
+        r = self.run_main(*self.base("--style-pack", self.scoped(True), "--use", self.USE))
+        self.assertEqual(r.recipe["use"], self.USE)
+        self.assertEqual(r.recipe["registerException"]["id"], "reader-portraits")
+        self.assertEqual(r.recipe["registerException"]["decided"]["by"], "Gary Sheng")
+
+    def test_an_unscoped_pack_is_untouched_and_records_a_given_use(self):
+        pack = make_pack(self.tmp)
+        r = self.run_main(*self.base("--style-pack", pack))
+        self.assertNotIn("use", r.recipe)
+        r = self.run_main(*self.base("--style-pack", pack, "--use", "x:y"))
+        self.assertEqual(r.recipe["use"], "x:y")
+
+    def test_use_without_a_pack_refuses(self):
+        msg = self.expect_exit(*self.base("--use", self.USE))
+        self.assertIn("--style-pack", msg)
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

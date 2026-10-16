@@ -202,6 +202,10 @@ class CanonStore:
         problems += self._validate_assets()
         from .surfaces import validate_surfaces
         problems += validate_surfaces(self.dir, self.manifest)
+        # A pack's scope and a register's medium exception (v0.62): typed so the render gate
+        # can read them, checked here so the two records of one decision cannot drift apart.
+        from .scope import validate_scopes
+        problems += validate_scopes(self.dir, self.manifest)
         from .kit import validate_kits
         problems += validate_kits(self.dir, self.craft)
         from .lines import validate_lines

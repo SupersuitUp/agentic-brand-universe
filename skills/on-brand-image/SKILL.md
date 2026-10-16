@@ -68,6 +68,15 @@ rises from" beats "a tall neck"), and **put the scale anchor fully inside the fr
 person cropped at the shoulders cannot establish eye level; the same shot with their whole
 body in frame fixed it in one roll.
 
+## A scoped pack: say which use the render is for
+
+A pack with a typed `scope` (SPEC §4.7, v0.62) renders only for the uses it lists, so pass
+`--use <id>` with one of them. With no `--use`, or one the scope does not list, the render is
+refused before anything is spent, and the refusal names the allowed uses. Never widen the scope
+to get a render through: a new use is a decision, recorded first (who, when, their words) in the
+pack's `scope` and, when the universe's register carries an exception for the pack, in that
+exception too. The recipe records the use and the exception it rendered under.
+
 ## Canon entities: pass `--entity`, never hand-picked `--ref`
 
 If a subject is a canon entity, name it and let the generator resolve it:
