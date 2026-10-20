@@ -46,7 +46,7 @@ test("three directions that differ in concept, a kept site is one of them", () =
 test("boards render in parallel and go to a compare page", () => {
   assert.match(body, /render-board\.mjs/);
   assert.match(body, /wait \$pa/);
-  assert.match(body, /ask_operator\(\{ kind: "compare"/);
+  assert.match(body, /ask_operator\(\{\s*kind: "compare"/);
 });
 
 test("nothing is golden before their yes", () => {
@@ -105,7 +105,7 @@ test("every script the skill runs exists, and every abu flag it uses is in the e
 test("failure handling: each has its action", () => {
   assert.match(body, /HTTP error, a redirect to a login page, or an unreachable host[\s\S]*go to the interview/);
   assert.match(body, /at most the name and one color the operator confirms/);
-  assert.match(body, /If the compare page is unavailable[\s\S]*AskUserQuestion[\s\S]*Never proceed on silence/);
+  assert.match(body, /status "fallback"[\s\S]*AskUserQuestion[\s\S]*never proceed on silence/);
   assert.match(body, /If `gh` is missing, unauthenticated or the name is taken[\s\S]*valid and\s+safe locally/);
   assert.match(body, /failed board is re-rendered once on its own, then reported/);
   assert.match(body, /A raster logo only[\s\S]*monogram[\s\S]*potracer/);
@@ -175,4 +175,21 @@ test("make-a-book, book-doctor and land-work use the same corrected discovery", 
     assert.ok(!t.includes("cache/garysheng"), sk);
   }
   assert.ok(!skill.includes("cache/garysheng"));
+});
+
+test("the compare call is fully shaped: title, source slug, why, items {id,label,image}", () => {
+  const call = body.match(/ask_operator\(\{[\s\S]*?\n\}\)/)[0];
+  assert.match(call, /kind: "compare"/);
+  assert.match(call, /title: /);
+  assert.match(call, /source: "<slug>-brand-r<n>"/);
+  assert.match(call, /why: /);
+  for (const id of ["a", "b", "c"]) assert.match(call, new RegExp(`\\{ id: "${id}", label: "<concept [^"]*", image: "<abs work>/${id}\\.png" \\}`));
+  assert.doesNotMatch(call, /items: \[<a\.png>/);
+});
+
+test("compare statuses each have an action: fallback, handoff, timeout, and a re-round source", () => {
+  assert.match(body, /status "fallback"[\s\S]*AskUserQuestion/);
+  assert.match(body, /status "handoff"[\s\S]*watch/);
+  assert.match(body, /status "timeout"[\s\S]*never proceed|status "timeout"[\s\S]*silence/i);
+  assert.match(body, /absolute path/i);
 });

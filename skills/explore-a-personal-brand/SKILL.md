@@ -146,16 +146,32 @@ that stood in, and any font it could not check. Look at every board before sendi
 ## 7. Put the three side by side on their phone
 
 ```
-ask_operator({ kind: "compare", items: [<a.png>, <b.png>, <c.png>] })
+ask_operator({
+  kind: "compare",
+  title: "Which direction feels like <Name>?",
+  source: "<slug>-brand-r<n>",          // lowercase slug, at most 48 chars; <n> is the round, so a re-round is a new ask
+  why: "Picks the brand for <Name>'s pages; nothing is seeded until they say yes",
+  items: [
+    { id: "a", label: "<concept A, in a few words>", image: "<abs work>/a.png" },
+    { id: "b", label: "<concept B, in a few words>", image: "<abs work>/b.png" },
+    { id: "c", label: "<concept C, in a few words>", image: "<abs work>/c.png" }
+  ]
+})
 ```
 
-Name each card with its concept, not a letter. Two taps to pick, and the "Other" box is always on screen: a
-mix is a legitimate answer. A review reaches them as a Helm notification (not a texted link); `ask_operator`
-hands back a `chatLink`, so also link the page in the chat reply, named, never bare.
+`image` is the **absolute path** of the board PNG; label each card with its concept, not a letter. Two taps to
+pick, and the "Other" box is always on screen (`allowOther` defaults to true): a mix is a legitimate answer.
+A review reaches them as a Helm notification (not a texted link); the result carries a `chatLink`, so also
+link the page in the chat reply, named, never bare.
 
-**If the compare page is unavailable** (the tile host is down, `ask_operator` errors): show the three PNGs
-with `AskUserQuestion` previews (the options are the artifact here, so the preview is right) and put the
-off-list answer in the question text. **Never proceed on silence.**
+What each result status means:
+- **status "fallback"** (the phone is not reachable): show the three PNGs with `AskUserQuestion` previews (the
+  options are the artifact here, so a preview is right), put the off-list answer in the question text, and say
+  once which row was red. Reason `probe-unknown` is a status check that could not run: run `tile_app_status`
+  and, if its rows are green, call `ask_operator` again before falling back.
+- **status "handoff"**: the page is live; keep waiting with `run-a-review`'s watch (`watch-card.sh <source>` for a decision
+  card). With reason `send-failed` the text to their phone failed: put the page's `chatLink` in the chat, say so, then watch.
+- **status "timeout"**: they did not answer in time. Say so and ask again later; **never proceed on silence**, and never seed.
 
 ## 8. Refine until they say yes
 
