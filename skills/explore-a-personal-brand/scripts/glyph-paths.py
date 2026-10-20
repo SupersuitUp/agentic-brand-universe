@@ -39,16 +39,15 @@ def load_font(family, weight, text):
     m = re.search(r"url\(([^)]+)\)", css)
     if not m:
         sys.exit(f"glyph-paths: no font file in the Google Fonts reply for {family!r}")
-    with tempfile.NamedTemporaryFile(suffix=".font") as f:
-        f.write(fetch(m.group(1))); f.flush()
-        font = TTFont(f.name)
-        font.getGlyphSet()  # force load before the temp file goes
+    with tempfile.TemporaryDirectory() as d:  # removes both temp files, even on error
+        src, dst = d + "/in.font", d + "/static.font"
+        open(src, "wb").write(fetch(m.group(1)))
+        font = TTFont(src)
         if "fvar" in font:
             from fontTools.varLib import instancer
             font = instancer.instantiateVariableFont(font, {"wght": weight})
-        font.save(f.name + ".static"); font = TTFont(f.name + ".static")
-        font.getGlyphSet()
-        return font
+        font.save(dst)
+        return TTFont(dst, lazy=False)
 
 
 def main():

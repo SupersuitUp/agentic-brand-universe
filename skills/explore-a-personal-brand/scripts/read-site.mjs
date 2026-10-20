@@ -7,6 +7,7 @@ import { join, resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launch } from "./cdp.mjs";
 import { validateDirection } from "./direction.mjs";
+import { resolveFont } from "./fonts.mjs";
 
 // Runs inside the page. Returns plain data.
 const PAGE_SCRIPT = `(() => {
@@ -51,6 +52,7 @@ const PAGE_SCRIPT = `(() => {
   const first = (s) => String(s || '').split(',')[0].trim().replace(/^["']|["']$/g, '');
   const h = document.querySelector('h1') || document.querySelector('h2');
   const fonts = { display: first(h && getComputedStyle(h).fontFamily), body: first(getComputedStyle(document.body).fontFamily) };
+  const stacks = { display: h ? getComputedStyle(h).fontFamily : '', body: getComputedStyle(document.body).fontFamily };
   const abs = (u) => { try { return new URL(u, location.href).href; } catch { return null; } };
   const meta = (p) => { const m = document.querySelector('meta[property="'+p+'"],meta[name="'+p+'"]'); return m && m.content; };
   const link = (sel) => { const l = document.querySelector(sel); return l ? abs(l.getAttribute('href')) : null; };
@@ -93,7 +95,7 @@ const PAGE_SCRIPT = `(() => {
   }
   const name = meta('og:site_name') || (document.title || '').split(/[|\\-–—:·]/)[0].trim() || (h && h.textContent.trim()) || location.hostname;
   return { name, description: meta('og:description') || meta('description') || '', ground, text,
-    area: [...area].sort((a,b) => b[1]-a[1]).slice(0, 8), accents, fonts, icon, touch, share, logo };
+    area: [...area].sort((a,b) => b[1]-a[1]).slice(0, 8), accents, fonts, stacks, icon, touch, share, logo };
 })()`;
 
 const EXT_OK = new Set([".svg", ".png", ".ico", ".jpg", ".jpeg", ".webp"]);
@@ -158,7 +160,7 @@ export async function readSite(url, { outDir } = {}) {
       phone: await shot(c, 390, 844, join(outDir, "phone.png")),
       desktop: await shot(c, 1280, 900, join(outDir, "desktop.png")),
     };
-    const out = { url, name: p.name, description: p.description, colors, fonts: p.fonts, logo, favicon, faviconFile, touchIcon, shareImage, shots, unresolved };
+    const out = { url, name: p.name, description: p.description, colors, fonts: p.fonts, fontStacks: p.stacks, logo, favicon, faviconFile, touchIcon, shareImage, shots, unresolved };
     writeFileSync(join(outDir, "site-read.json"), JSON.stringify(out, null, 2) + "\n");
     return out;
   } finally {
@@ -168,24 +170,35 @@ export async function readSite(url, { outDir } = {}) {
 
 const GENERIC = new Set(["serif", "sans-serif", "monospace", "system-ui", "ui-sans-serif", "ui-serif", "-apple-system", "blinkmacsystemfont", "helvetica neue", "helvetica", "arial", "georgia", "times new roman", "times", "segoe ui", "roboto"]);
 
-/** The "site is me" case: a valid direction taken straight from a site read. */
-export function toDirection(sr) {
+/**
+ * The "site is me" case: a valid direction taken straight from a site read. A family that is not
+ * on Google Fonts is replaced by the closest Google family and the original recorded in `sources`.
+ * opts.fetchFn is injectable (tests).
+ */
+export async function toDirection(sr, opts = {}) {
   const role = (r) => sr.colors.find((c) => c.role === r)?.hex;
   const ground = role("ground"), ink = role("text");
   if (!ground || !ink) {
     throw new Error("cannot make a direction from this site: " + Object.entries(sr.unresolved || {}).map(([k, v]) => `${k}: ${v}`).join("; "));
   }
   const accent = role("accent") || sr.colors.find((c) => c.role === "other")?.hex || ink;
-  const font = (f, fallback) => (f && !GENERIC.has(f.toLowerCase()) ? f : fallback);
-  const body = font(sr.fonts?.body, "Inter");
-  const display = font(sr.fonts?.display, body);
+  const sources = [{ choice: "palette", from: "site", detail: sr.url }];
+  const pick = async (kind, fallback) => {
+    const f = sr.fonts?.[kind];
+    if (!f || GENERIC.has(f.toLowerCase())) return fallback;
+    const r = await resolveFont(f, { stack: sr.fontStacks?.[kind], fetchFn: opts.fetchFn });
+    if (r.replaced) sources.push({ choice: `type.${kind}`, from: "site", detail: r.replaced.reason });
+    return r.family;
+  };
+  const body = await pick("body", "Inter");
+  const display = await pick("display", body);
   const letters = (sr.name || "X").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "X";
   const d = {
     name: sr.name, concept: sr.description || `The brand of ${sr.url}`,
     palette: { ground, ink, accent },
     type: { display, body },
     mark: { kind: "monogram", letters, treatment: "plain" },
-    sources: [{ choice: "palette", from: "site", detail: sr.url }],
+    sources,
   };
   const errs = validateDirection(d);
   if (errs.length) throw new Error("toDirection produced an invalid direction: " + errs.join("; "));

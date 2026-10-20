@@ -14,13 +14,14 @@ import { fileURLToPath } from "node:url";
 import { launch } from "./cdp.mjs";
 import { ratio, fixContrast } from "./contrast.mjs";
 import { monogramSvg, safeFamily } from "./mark.mjs";
+import { resolveFont } from "./fonts.mjs";
 import { validateDirection } from "./direction.mjs";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const gurl = (d, b) => "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(safeFamily(d)).replace(/%20/g, "+") +
   ":wght@400;600&family=" + encodeURIComponent(safeFamily(b)).replace(/%20/g, "+") + ":wght@400;500;600&display=swap";
 
-export function boardHtml(direction, notes = [], markSvg) {
+export function boardHtml(direction, notes = [], markSvg, standIns = []) {
   const { palette: p, type: t } = direction;
   const sized = (px) => `<span class="m" style="width:${px}px;height:${px}px">${markSvg}</span>`;
   const r = (a, b) => ratio(a, b).toFixed(1);
@@ -59,16 +60,31 @@ h1{font-size:34px;line-height:1.1;margin:0 0 8px}
 <div class="lbl">Contrast</div>
 <div class="c">text on ground ${r(p.ink, p.ground)}:1<br>accent on ground ${r(p.accent, p.ground)}:1</div>
 ${notes.map((n) => `<div class="note">Adjusted: ${esc(n)}</div>`).join("")}
-<div id="foot" class="note"></div>
+<div id="foot" class="note">${standIns.map((x) => `${esc(x.to)} stood in for ${esc(x.from)} (${esc(x.reason)})`).join("<br>")}</div>
 </body></html>`;
 }
 
-export async function renderBoard(direction, outPng) {
+/**
+ * opts.fetchFn / opts.outlines are injectable (tests). A family that is not on Google Fonts is
+ * replaced by the closest Google family (see fonts.mjs) and named in the board footer; the board
+ * never aborts for it. The returned direction carries the stand-ins, so what is seeded is what
+ * was drawn.
+ */
+export async function renderBoard(direction, outPng, opts = {}) {
   const errs = validateDirection(direction);
   if (errs.length) throw new Error("invalid direction: " + errs.join("; "));
   const { direction: fixed, notes } = fixContrast(direction);
-  const markSvg = fixed.mark.kind === "svg" ? fixed.mark.svg : await monogramSvg(fixed.mark, fixed.palette, fixed.type.display);
-  const html = boardHtml(fixed, notes, markSvg);
+  const standIns = [];
+  for (const k of ["display", "body"]) {
+    const f = await resolveFont(safeFamily(fixed.type[k]), { fetchFn: opts.fetchFn });
+    if (f.replaced) {
+      standIns.push(f.replaced);
+      fixed.type[k] = f.family;
+      fixed.sources = [...(fixed.sources || []), { choice: `type.${k}`, from: "site", detail: f.replaced.reason }];
+    }
+  }
+  const markSvg = fixed.mark.kind === "svg" ? fixed.mark.svg : await monogramSvg(fixed.mark, fixed.palette, fixed.type.display, { fetchFn: opts.fetchFn, outlines: opts.outlines });
+  const html = boardHtml(fixed, notes, markSvg, standIns);
   const c = await launch({ width: 390, height: 900 });
   try {
     await c.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 900, deviceScaleFactor: 2, mobile: false });
@@ -83,13 +99,13 @@ export async function renderBoard(direction, outPng) {
       awaitPromise: true, returnByValue: true });
     if (fell.exceptionDetails) throw new Error("font check failed: " + (fell.exceptionDetails.exception?.description || fell.exceptionDetails.text));
     const fontsFellBack = fell.result.value === true;
-    if (fontsFellBack) await c.send("Runtime.evaluate", { expression: `document.getElementById('foot').textContent = 'fonts fell back'` });
+    if (fontsFellBack) await c.send("Runtime.evaluate", { expression: `(f => { f.innerHTML += (f.innerHTML ? '<br>' : '') + 'fonts fell back'; })(document.getElementById('foot'))` });
     const { cssContentSize } = await c.send("Page.getLayoutMetrics");
     const h = Math.ceil(cssContentSize.height);
     await c.send("Emulation.setDeviceMetricsOverride", { width: 390, height: h, deviceScaleFactor: 2, mobile: false });
     const { data } = await c.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     writeFileSync(outPng, Buffer.from(data, "base64"));
-    return { out: resolve(outPng), notes, direction: fixed, markSvg, fontsFellBack, cssHeight: h };
+    return { out: resolve(outPng), notes, direction: fixed, markSvg, fontsFellBack, standIns, cssHeight: h };
   } finally {
     await c.close();
   }
@@ -108,5 +124,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log("fixed direction:", base + ".fixed.json");
   console.log("mark:", base + ".mark.svg");
   for (const n of r.notes) console.log("note:", n);
+  for (const x of r.standIns) console.log("font:", `${x.to} stood in for ${x.from}`);
   if (r.fontsFellBack) console.log("warning: fonts fell back (Google Fonts did not load)");
 }

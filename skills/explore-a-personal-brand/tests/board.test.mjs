@@ -8,13 +8,16 @@ import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { ratio, fixContrast } from "../scripts/contrast.mjs";
 import { findChrome } from "../scripts/cdp.mjs";
-import { renderBoard } from "../scripts/render-board.mjs";
+import { renderBoard, boardHtml } from "../scripts/render-board.mjs";
 import { monogramSvg } from "../scripts/mark.mjs";
 
 let HAVE = true;
 try { findChrome(); } catch { HAVE = false; }
-const T = (n, f, needs = true) => test(n, { skip: needs && !HAVE && "Chrome not installed" }, f);
-const NET = process.env.ABU_OFFLINE ? "no network" : false;
+const NET = process.env.ABU_OFFLINE ? "no network (ABU_OFFLINE)" : false;
+const T = (n, f, o = {}) => test(n, { skip: (!HAVE && "Chrome not installed") || (o.net && NET) }, f);
+const TNET = (n, f) => T(n, f, { net: true });
+// Google Fonts stand-in for tests: only the listed families "exist".
+const fakeFetch = (ok) => async (url) => ({ status: ok.has(decodeURIComponent(new URL(url).searchParams.get("family")).replace(/\+/g, " ")) ? 200 : 404 });
 
 const D = {
   name: "Sample Studio", concept: "A made-up studio for testing.",
@@ -77,7 +80,7 @@ test("monogramSvg is outlines: paths, no <text>, the accent", { skip: NET }, asy
   assert.equal(py.status, 0);
 });
 
-T("renderBoard writes a 2x PNG, top-left is the ground", async () => {
+TNET("renderBoard writes a 2x PNG, top-left is the ground", async () => {
   const out = join(mkdtempSync(join(tmpdir(), "board-")), "b.png");
   const r = await renderBoard(D, out);
   const i = png(readFileSync(out));
@@ -88,7 +91,7 @@ T("renderBoard writes a 2x PNG, top-left is the ground", async () => {
   assert.equal(r.fontsFellBack, false);
 });
 
-T("the CLI persists the fixed direction and the mark", async () => {
+TNET("the CLI persists the fixed direction and the mark", async () => {
   const dir = mkdtempSync(join(tmpdir(), "boardcli-"));
   const d = structuredClone(D); d.palette.ink = "#3a3f45";
   writeFileSync(join(dir, "dir.json"), JSON.stringify(d));
@@ -100,4 +103,38 @@ T("the CLI persists the fixed direction and the mark", async () => {
   assert.equal(JSON.parse(readFileSync(join(dir, "dir.json"), "utf8")).palette.ink, "#3a3f45", "input untouched");
   const mark = readFileSync(join(dir, "dir.mark.svg"), "utf8");
   assert.ok(!mark.includes("<text") && mark.includes("<path"));
+});
+
+test("monogramSvg draws in a stand-in family when the display font is not on Google Fonts", async () => {
+  const asked = []; const standIns = [];
+  const svg = await monogramSvg(D.mark, D.palette, "Foundry Serif", {
+    fetchFn: fakeFetch(new Set(["Source Serif 4"])), stack: "'Foundry Serif', serif",
+    outlines: (family) => { asked.push(family); return "M0 0L10 10Z"; }, onStandIn: (x) => standIns.push(x) });
+  assert.deepEqual(asked, ["Source Serif 4"]);
+  assert.equal(standIns[0].from, "Foundry Serif");
+  assert.ok(svg.includes('d="M0 0L10 10Z"') && !svg.includes("<text"));
+});
+
+test("monogramSvg keeps an available family", async () => {
+  const asked = [];
+  await monogramSvg(D.mark, D.palette, "Fraunces", { fetchFn: fakeFetch(new Set(["Fraunces"])), outlines: (f) => { asked.push(f); return "M0 0Z"; } });
+  assert.deepEqual(asked, ["Fraunces"]);
+});
+
+test("boardHtml names the font that stood in", () => {
+  const html = boardHtml(D, [], "<svg/>", [{ from: "Foundry Serif", to: "Source Serif 4", reason: "site uses Foundry Serif, not on Google Fonts" }]);
+  assert.match(html, /Source Serif 4 stood in for Foundry Serif/);
+  assert.ok(!boardHtml(D, [], "<svg/>", []).includes("stood in"));
+});
+
+T("renderBoard never aborts for an unavailable family: it stands one in and records it", async () => {
+  const d = structuredClone(D); d.type.display = "Foundry Serif";
+  const out = join(mkdtempSync(join(tmpdir(), "board-")), "b.png");
+  const r = await renderBoard(d, out, { fetchFn: fakeFetch(new Set(["Inter", "Source Serif 4"])), outlines: () => "M10 10L90 10L50 90Z" });
+  assert.equal(r.direction.type.display, "Source Serif 4");
+  assert.equal(r.standIns.length, 1);
+  assert.equal(r.standIns[0].from, "Foundry Serif");
+  assert.ok(r.direction.sources.some((x) => x.detail.includes("Foundry Serif")));
+  assert.ok(r.markSvg.includes("M10 10L90 10L50 90Z"));
+  assert.equal(png(readFileSync(out)).width, 780);
 });

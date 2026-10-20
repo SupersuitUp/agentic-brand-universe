@@ -21,7 +21,16 @@ export function findChrome() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function launch({ width = 1280, height = 900 } = {}) {
+/** Launch with up to 3 attempts: a headless Chrome occasionally dies at startup under load. */
+export async function launch(opts = {}) {
+  let err;
+  for (let i = 0; i < 3; i++) {
+    try { return await launchOnce(opts); } catch (e) { err = e; await sleep(300); }
+  }
+  throw err;
+}
+
+async function launchOnce({ width = 1280, height = 900 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "abu-cdp-"));
   const proc = spawn(findChrome(), [
     "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${dir}`,
@@ -34,9 +43,9 @@ export async function launch({ width = 1280, height = 900 } = {}) {
   let port = null;
   for (let i = 0; i < 100 && !port; i++) {
     const f = join(dir, "DevToolsActivePort");
-    if (existsSync(f)) port = Number(readFileSync(f, "utf8").split("\n")[0]);
-    else if (proc.exitCode !== null) throw new Error("Chrome exited early: " + stderr.slice(-300));
-    else await sleep(100);
+    if (existsSync(f)) { const l = readFileSync(f, "utf8").split("\n"); if (l.length >= 2 && l[1]) port = Number(l[0]); }
+    if (!port && proc.exitCode !== null) throw new Error("Chrome exited early: " + stderr.slice(-300));
+    if (!port) await sleep(100);
   }
   if (!port) { proc.kill(); throw new Error("Chrome gave no DevTools port: " + stderr.slice(-300)); }
 

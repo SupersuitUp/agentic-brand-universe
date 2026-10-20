@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { ratio } from "./contrast.mjs";
+import { resolveFont } from "./fonts.mjs";
 
 const HELPER = join(dirname(fileURLToPath(import.meta.url)), "glyph-paths.py");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -12,12 +13,23 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 /** A font family name safe to hand to CSS and URLs: letters, digits, space, dash. */
 export const safeFamily = (f) => String(f).replace(/[^\w \-]/g, "").trim();
 
-export async function monogramSvg({ letters, treatment = "plain" }, palette, display = "Georgia") {
+/** Outlines via the python helper. Injectable (tests) as opts.outlines(family, letters, tracking) -> path data. */
+function pythonOutlines(family, letters, tracking) {
+  const r = spawnSync("python3", [HELPER, safeFamily(family), letters, "--weight", "600", "--tracking", String(tracking)], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error("mark outlines failed: " + (r.stderr || "").trim().split("\n").pop());
+  return JSON.parse(r.stdout).d;
+}
+
+/**
+ * opts.fetchFn and opts.outlines are injectable. If `display` is not on Google Fonts the mark is
+ * drawn in the closest Google family instead, and opts.onStandIn({from,to,reason}) is told.
+ */
+export async function monogramSvg({ letters, treatment = "plain" }, palette, display = "Georgia", opts = {}) {
   const L = String(letters).slice(0, 3).toUpperCase();
   const tracking = treatment === "serif-ligature" ? -0.05 : 0;
-  const r = spawnSync("python3", [HELPER, safeFamily(display), L, "--weight", "600", "--tracking", String(tracking)], { encoding: "utf8" });
-  if (r.status !== 0) throw new Error("mark outlines failed: " + (r.stderr || "").trim().split("\n").pop());
-  const { d } = JSON.parse(r.stdout);
+  const font = await resolveFont(safeFamily(display), { fetchFn: opts.fetchFn, stack: opts.stack });
+  if (font.replaced && opts.onStandIn) opts.onStandIn(font.replaced);
+  const d = (opts.outlines || pythonOutlines)(font.family, L, tracking);
   const fg = ratio(palette.ground, palette.accent) >= ratio(palette.ink, palette.accent) ? palette.ground : palette.ink;
   const rx = treatment === "enclosed" ? 50 : 14;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="${esc(L)}">` +

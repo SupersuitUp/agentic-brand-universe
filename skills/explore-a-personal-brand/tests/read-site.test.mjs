@@ -23,6 +23,17 @@ function oklchHex(L, C, hDeg) {
 }
 const near = (hex, rgb, tol = 3) => [1, 3, 5].every((i, k) => Math.abs(parseInt(hex.slice(i, i + 2), 16) - rgb[k]) <= tol);
 
+// An injectable fetch standing in for Google Fonts: 200 for the listed families, 404 otherwise.
+const fakeFetch = (ok) => async (url) => {
+  const fam = decodeURIComponent(new URL(url).searchParams.get("family")).replace(/\+/g, " ");
+  return { status: ok.has(fam) ? 200 : 404 };
+};
+const SR = (fonts, stacks = {}) => ({
+  url: "https://acme.test", name: "Acme Studio", description: "d",
+  colors: [{ hex: "#101010", role: "ground" }, { hex: "#eeeeee", role: "text" }, { hex: "#cc5500", role: "accent" }],
+  fonts, fontStacks: stacks, unresolved: {},
+});
+
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const routes = {
   "/dark": ["dark-site.html", "text/html"], "/light": ["light-site.html", "text/html"],
@@ -71,7 +82,7 @@ T("light site: png favicon, no logo", async () => {
 
 T("toDirection gives a valid direction", async () => {
   const s = await readSite(base + "/dark", { outDir: out() });
-  const d = toDirection(s);
+  const d = await toDirection(s, { fetchFn: fakeFetch(new Set(["Georgia", "Inter"])) });
   assert.deepEqual(validateDirection(d), []);
   assert.equal(d.palette.ground, "#0b0d10");
   assert.equal(d.mark.letters, "NW");
@@ -107,5 +118,27 @@ T("a transparent page records why ground is unresolved instead of defaulting", a
   const s = await readSite("data:text/html,<body style='color:%23123456'>x</body>", { outDir: dir });
   assert.equal(s.colors.find((c) => c.role === "ground"), undefined);
   assert.match(s.unresolved.ground, /no opaque background/);
-  assert.throws(() => toDirection(s), /cannot make a direction/);
+  await assert.rejects(() => toDirection(s), /cannot make a direction/);
+});
+
+test("toDirection swaps a family not on Google Fonts for the closest one and records it", async () => {
+  const f = fakeFetch(new Set(["Inter"]));
+  const d = await toDirection(SR({ display: "Acme Grotesk Pro", body: "Inter" }, { display: "'Acme Grotesk Pro', sans-serif" }), { fetchFn: f });
+  assert.equal(d.type.display, "Inter");
+  assert.deepEqual(validateDirection(d), []);
+  assert.ok(d.sources.some((x) => x.choice === "type.display" && x.detail === "site uses Acme Grotesk Pro, not on Google Fonts"));
+});
+
+test("toDirection picks the stand-in by classification", async () => {
+  const f = fakeFetch(new Set());
+  const pick = async (family, stack) => (await toDirection(SR({ display: family, body: family }, { display: stack, body: stack }), { fetchFn: f })).type.display;
+  assert.equal(await pick("Foundry Serif", "'Foundry Serif', serif"), "Source Serif 4");
+  assert.equal(await pick("Foundry Cut", "'Foundry Cut', monospace"), "IBM Plex Mono");
+  assert.equal(await pick("Foundry Cut", "'Foundry Cut', cursive"), "Fraunces");
+});
+
+test("toDirection keeps an available family and records nothing", async () => {
+  const d = await toDirection(SR({ display: "Fraunces", body: "Inter" }), { fetchFn: fakeFetch(new Set(["Fraunces", "Inter"])) });
+  assert.equal(d.type.display, "Fraunces");
+  assert.equal(d.sources.length, 1);
 });
