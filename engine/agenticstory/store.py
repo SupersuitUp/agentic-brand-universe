@@ -70,6 +70,8 @@ class CanonStore:
         if craft_dir.exists():
             declared_in: dict[str, str] = {}
             for f in sorted(craft_dir.glob("*.json")):
+                if f.name.endswith(".recipe.json"):
+                    continue  # a provenance sidecar (e.g. from `abu seed`), not a craft record
                 # UTF-8 by name: a record's words are not ASCII (a section sign, a curly quote),
                 # and under a C locale the default codec refused a file the engine itself wrote.
                 c = CraftCanon.from_dict(json.loads(f.read_text(encoding="utf-8")))

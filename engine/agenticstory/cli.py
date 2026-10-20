@@ -291,6 +291,13 @@ def build_parser() -> argparse.ArgumentParser:
     ini.add_argument("--asset-root", default=".", help="where entity asset paths resolve (default: the universe dir)")
     ini.add_argument("--example", action="store_true", help="also scaffold a worked example (character/setting/story/relation)")
     ini.add_argument("--force", action="store_true", help="overwrite an existing universe.json")
+    sd = sub.add_parser("seed", help="write a brand direction into a scaffolded universe "
+                                     "(palette, type, mark, brief, surfaces)")
+    sd.add_argument("universe")
+    sd.add_argument("--from", dest="direction", required=True, help="direction.json")
+    sd.add_argument("--brief", required=True, help="brand brief markdown")
+    sd.add_argument("--mark", required=True, help="the mark, as an SVG file")
+    sd.add_argument("--board", default=None, help="brand board PNG, becomes the register anchor")
     return ap
 
 
@@ -385,6 +392,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # init does not load a store (the universe does not exist yet)
+    if args.cmd == "seed":
+        from . import direction as _dir, seed as _seed
+        d = _dir.load_direction(args.direction)
+        errs = _dir.validate_direction(d)
+        if errs:
+            print("seed: invalid direction:"); [print(f"  - {e}") for e in errs]; return 1
+        written = _seed.seed_universe(
+            args.universe, d, brief_md=Path(args.brief).read_text(),
+            board_png=args.board, mark_svg=Path(args.mark).read_text())
+        print(f"seed [{d['name']}]: wrote {len(written)} file(s)")
+        for p in written:
+            print(f"  + {p}")
+        return 0
     if args.cmd == "init":
         try:
             written = scaffold.scaffold_universe(
