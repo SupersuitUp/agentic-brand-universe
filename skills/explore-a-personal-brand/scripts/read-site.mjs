@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // read-site.mjs: read a live website's brand (colors, fonts, logo, icons, screenshots)
-// with a throwaway headless Chrome. Usage: read-site.mjs <url> --out <dir>
+// with a throwaway headless Chrome. Usage: read-site.mjs <url> --out <dir> [--direction <out.json>]
+// --direction also writes toDirection's output (the "site is the brand" direction). Exit 1 on an
+// HTTP error, a login redirect or an unreachable host.
 // Writes <dir>/site-read.json and returns the same object. Node 22+.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
@@ -127,9 +129,18 @@ export async function readSite(url, { outDir } = {}) {
   const c = await launch();
   try {
     await c.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+    await c.send("Network.enable");
+    let doc = null;
+    c.on("Network.responseReceived", (e) => { if (e.type === "Document") doc = e.response; });
     const loaded = c.once("Page.loadEventFired", 20000);
-    await c.send("Page.navigate", { url });
+    loaded.catch(() => {}); // a navigation error below throws first; do not leave this rejection unhandled
+    const nav = await c.send("Page.navigate", { url });
+    if (nav.errorText) throw new Error(`read-site: could not load ${url} (${nav.errorText})`);
     await loaded;
+    if (doc && doc.status >= 400) throw new Error(`read-site: ${url} answered HTTP ${doc.status}, which is an error page, not the brand`);
+    if (doc && doc.url !== url && /\/(log-?in|sign-?in|sso|auth|account\/login)(\/|\?|$)/i.test(new URL(doc.url).pathname + new URL(doc.url).search)) {
+      throw new Error(`read-site: ${url} redirected to ${doc.url}, which looks like a login page, not the brand`);
+    }
     await c.send("Runtime.evaluate", { expression: "document.fonts && document.fonts.ready.then(() => 1)", awaitPromise: true });
     const ev = await c.send("Runtime.evaluate", { expression: PAGE_SCRIPT, returnByValue: true });
     if (ev.exceptionDetails) {
@@ -188,6 +199,7 @@ export async function toDirection(sr, opts = {}) {
     if (!f || GENERIC.has(f.toLowerCase())) return fallback;
     const r = await resolveFont(f, { stack: sr.fontStacks?.[kind], fetchFn: opts.fetchFn });
     if (r.replaced) sources.push({ choice: `type.${kind}`, from: "site", detail: r.replaced.reason });
+    else if (r.couldNotCheck) sources.push({ choice: `type.${kind}`, from: "site", detail: `could not check whether ${f} is on Google Fonts` });
     return r.family;
   };
   const body = await pick("body", "Inter");
@@ -207,9 +219,17 @@ export async function toDirection(sr, opts = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const a = process.argv.slice(2);
-  const url = a.find((x) => !x.startsWith("--") && a[a.indexOf(x) - 1] !== "--out");
-  const oi = a.indexOf("--out");
-  if (!url || oi < 0 || !a[oi + 1]) { console.error("usage: read-site.mjs <url> --out <dir>"); process.exit(2); }
-  const r = await readSite(url, { outDir: a[oi + 1] });
-  console.log(JSON.stringify(r, null, 2));
+  const flag = (n) => { const i = a.indexOf(n); return i < 0 ? null : a[i + 1]; };
+  const valued = new Set(["--out", "--direction"].map((f) => a.indexOf(f) + 1).filter((i) => i > 0));
+  const url = a.find((x, i) => !x.startsWith("--") && !valued.has(i));
+  const out = flag("--out"), dirOut = flag("--direction");
+  if (!url || !out) { console.error("usage: read-site.mjs <url> --out <dir> [--direction <direction.json>]"); process.exit(2); }
+  try {
+    const r = await readSite(url, { outDir: out });
+    if (dirOut) {
+      writeFileSync(dirOut, JSON.stringify(await toDirection(r), null, 2) + "\n");
+      console.error("direction written to " + dirOut);
+    }
+    console.log(JSON.stringify(r, null, 2));
+  } catch (e) { console.error(e.message); process.exit(1); }
 }

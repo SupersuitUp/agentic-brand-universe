@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
+const CLI = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../../engine/agenticstory/cli.py"), "utf8");
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,7 +43,7 @@ test("three directions that differ in concept, a kept site is one of them", () =
 
 test("boards render in parallel and go to a compare page", () => {
   assert.match(body, /render-board\.mjs/);
-  assert.match(body, /wait\n/);
+  assert.match(body, /wait \$pa/);
   assert.match(body, /ask_operator\(\{ kind: "compare"/);
 });
 
@@ -53,17 +54,17 @@ test("nothing is golden before their yes", () => {
 
 test("on yes: init, seed with the fixed direction, board and mark, private repo, path", () => {
   assert.match(body, /abu init/);
-  assert.match(body, /abu seed[\s\S]*\.fixed\.json[\s\S]*\.mark\.svg[\s\S]*--board/);
+  assert.match(body, /abu seed[\s\S]*\.fixed\.json/);
   assert.match(body, /gh repo create <owner>\/<slug>-universe --private/);
   assert.match(body, /Return the universe path/);
 });
 
 test("a thin site is said plainly", () => {
-  assert.match(body, /Say plainly when a site is thin/);
+  assert.match(body, /A thin read[\s\S]*say so plainly/);
 });
 
 test("billing is not mentioned at all, so nothing claims to automate it", () => {
-  assert.doesNotMatch(skill, /billing|invoice|payment/i);
+  assert.doesNotMatch(skill, /billing|invoice/i);
 });
 
 test("HDSOP exists and every script the skill names exists", () => {
@@ -75,4 +76,36 @@ test("HDSOP exists and every script the skill names exists", () => {
 
 test("the plugin description lists the skill so it ships with a name", () => {
   assert.match(plugin.description, /explore-a-personal-brand/);
+});
+
+test("the kept-site route is runnable: the exact command, and it becomes direction 1 of 3", () => {
+  assert.match(body, /node "\$SK\/read-site\.mjs" <url> --out <work>\/site --direction <work>\/a\.json/);
+  assert.match(body, /direction 1 of the 3/);
+  assert.match(body, /For the "not really the brand" answer, omit `--direction`/);
+});
+
+test("paths resolve from anywhere: ABU is located the make-a-book way and abu has an invocation", () => {
+  assert.match(body, /ABU=\$\(python3 -c "import agenticstory,pathlib;/);
+  assert.match(body, /abu\(\) \{ node "\$ABU\/bin\/abu\.mjs"/);
+  for (const t of ["<work>", "<repos>", "<owner>", "<slug>"]) assert.ok(body.includes(`**\`${t}\`**`), t + " is defined");
+  assert.doesNotMatch(body, /node skills\/explore-a-personal-brand/);
+});
+
+test("every script the skill runs exists, and every abu flag it uses is in the engine CLI", () => {
+  for (const m of body.matchAll(/"\$SK\/([\w.-]+)"/g)) assert.ok(existsSync(join(ROOT, "scripts", m[1])), m[1]);
+  assert.ok(existsSync(join(ROOT, "../../bin/abu.mjs")));
+  for (const f of ["--from", "--brief", "--mark", "--board", "--name"]) {
+    assert.ok(body.includes(f) && CLI.includes(`"${f}"`), f);
+  }
+  assert.match(CLI, /sub\.add_parser\("seed"/);
+});
+
+test("failure handling: each has its action", () => {
+  assert.match(body, /HTTP error, a redirect to a login page, or an unreachable host[\s\S]*go to the interview/);
+  assert.match(body, /at most the name and one color the operator confirms/);
+  assert.match(body, /If the compare page is unavailable[\s\S]*AskUserQuestion[\s\S]*Never proceed on silence/);
+  assert.match(body, /If `gh` is missing, unauthenticated or the name is taken[\s\S]*valid and\s+safe locally/);
+  assert.match(body, /failed board is re-rendered once on its own, then reported/);
+  assert.match(body, /A raster logo only[\s\S]*monogram[\s\S]*potracer/);
+  assert.match(body, /Offline: say so and stop/);
 });

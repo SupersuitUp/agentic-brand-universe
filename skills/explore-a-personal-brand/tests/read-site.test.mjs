@@ -1,5 +1,6 @@
 import { test, before, after } from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFile } from "node:child_process";
+import { checkFont } from "../scripts/fonts.mjs";
 import { findChrome } from "../scripts/cdp.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -34,6 +35,9 @@ const SR = (fonts, stacks = {}) => ({
   fonts, fontStacks: stacks, unresolved: {},
 });
 
+// Async on purpose: spawnSync would freeze this process, and the fixture server lives in it.
+const runNode = (args) => new Promise((res) => execFile("node", args, { encoding: "utf8" }, (err, stdout, stderr) => res({ status: err ? err.code : 0, stdout, stderr })));
+
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const routes = {
   "/dark": ["dark-site.html", "text/html"], "/light": ["light-site.html", "text/html"],
@@ -44,6 +48,9 @@ const routes = {
 let server, base;
 before(async () => {
   server = createServer((req, res) => {
+    if (req.url === "/gated") { res.writeHead(302, { location: "/login" }); return res.end(); }
+    if (req.url === "/login") { res.writeHead(200, { "content-type": "text/html" }); return res.end("<body style='background:#fff'>Sign in</body>"); }
+    if (req.url === "/missing") { res.writeHead(404, { "content-type": "text/html" }); return res.end("<h1>Not found</h1>"); }
     const r = routes[req.url];
     if (!r) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "content-type": r[1] }); res.end(readFileSync(join(FIX, r[0])));
@@ -141,4 +148,43 @@ test("toDirection keeps an available family and records nothing", async () => {
   const d = await toDirection(SR({ display: "Fraunces", body: "Inter" }), { fetchFn: fakeFetch(new Set(["Fraunces", "Inter"])) });
   assert.equal(d.type.display, "Fraunces");
   assert.equal(d.sources.length, 1);
+});
+
+T("a 404 page is refused, not read as the brand", async () => {
+  await assert.rejects(() => readSite(base + "/missing", { outDir: out() }), /HTTP 404/);
+});
+
+T("a redirect to a login page is refused", async () => {
+  await assert.rejects(() => readSite(base + "/gated", { outDir: out() }), /looks like a login page/);
+});
+
+T("an unreachable host fails clearly", async () => {
+  await assert.rejects(() => readSite("http://127.0.0.1:1/", { outDir: out() }), /could not load|ERR_/);
+});
+
+T("the CLI --direction writes a valid direction for the kept site", async () => {
+  const dir = out(), file = join(dir, "d.json");
+  const run = await runNode([join(FIX, "../../scripts/read-site.mjs"), base + "/light", "--out", dir, "--direction", file]);
+  assert.equal(run.status, 0, run.stderr);
+  const d = JSON.parse(readFileSync(file, "utf8"));
+  assert.deepEqual(validateDirection(d), []);
+  assert.equal(d.palette.ground, "#faf7f0");
+  const bad = await runNode([join(FIX, "../../scripts/read-site.mjs"), base + "/missing", "--out", out(), "--direction", join(dir, "x.json")]);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /HTTP 404/);
+});
+
+test("checkFont: 200 yes, 400/404 no, anything else or a throw is unknown", async () => {
+  const f = (status) => async () => ({ status });
+  assert.equal(await checkFont("A", { fetchFn: f(200) }), "yes");
+  assert.equal(await checkFont("A", { fetchFn: f(404) }), "no");
+  assert.equal(await checkFont("A", { fetchFn: f(400) }), "no");
+  assert.equal(await checkFont("A", { fetchFn: f(503) }), "unknown");
+  assert.equal(await checkFont("A", { fetchFn: async () => { throw new Error("timeout"); } }), "unknown");
+});
+
+test("toDirection keeps a family it could not check and says so", async () => {
+  const d = await toDirection(SR({ display: "Foundry Serif", body: "Inter" }), { fetchFn: async () => ({ status: 503 }) });
+  assert.equal(d.type.display, "Foundry Serif");
+  assert.ok(d.sources.some((x) => x.detail === "could not check whether Foundry Serif is on Google Fonts"));
 });
