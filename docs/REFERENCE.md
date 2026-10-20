@@ -53,6 +53,7 @@ or a set of page heroes without ever declaring canon.
 | `create-style-pack` | Scaffold a Style Pack (SPEC §4.7) — a portable folder (pack.json + refs/) that defines ONE look and is consumable by on-brand-image with no universe. | yes |
 | `evolve-abu` | Evolve the Agentic Brand Universe framework itself — its skills, engine, spec, templates, and plugin — instead of hand-rolling around its gaps. | yes |
 | `explore` | Render a comparison SET that isolates one variable, so a human can decide a visual question by looking instead of by reading a description. | yes |
+| `explore-a-personal-brand` | Turn a person's sense of how their pages should look into a real brand universe they approved by looking at it. |  |
 | `judge-slot` | Judge one generated slot against an entity's locked golden, item by item over its declared invariants, in a context that has NOT been told how the slot was made. |  |
 | `land-work` | Merge a finished work branch home instead of leaving it parked, in ANY git repo (a universe, a platform repo, a site, anything). |  |
 | `lint-universe` | Lint a brand universe. Static checks over the universe and everything it declares (style packs, entities, goldens, provenance, craft canon, provider quirks) with no generation, no API calls, and no cost. | yes |
@@ -111,6 +112,7 @@ answers questions about it, and refuses renders whose references do not exist on
 | `massing-scaffold` | write a STARTER massing spec for a rectangular room (shell + opposed cameras + notes stub) to edit, so authoring a blueprint does not start from a blank file |
 | `relations` | list an entity's typed relations |
 | `report` | file what ABU got wrong: prints (or --open opens) a pre-filled GitHub issue; nothing is sent until you press submit |
+| `seed` | write a brand direction into a scaffolded universe (palette, type, mark, brief, surfaces) |
 | `unarchive` | put a retired entity back in service |
 | `validate` | typecheck a universe against the spec schema |
 | `wardrobe` | resolve what named characters are WEARING: which lookbooks apply, their aesthetic, variety rules, negatives and gate |
