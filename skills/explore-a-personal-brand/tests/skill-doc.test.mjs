@@ -193,3 +193,8 @@ test("compare statuses each have an action: fallback, handoff, timeout, and a re
   assert.match(body, /status "timeout"[\s\S]*never proceed|status "timeout"[\s\S]*silence/i);
   assert.match(body, /absolute path/i);
 });
+
+test("exit 3 is the thin-read branch, distinct from no site", () => {
+  assert.match(body, /Exit 3[\s\S]*thin-read branch, never "no site"/);
+  assert.match(body, /exits \*\*1\*\* and says which/);
+});

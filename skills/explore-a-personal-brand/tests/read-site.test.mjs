@@ -50,6 +50,9 @@ before(async () => {
   server = createServer((req, res) => {
     if (req.url === "/gated") { res.writeHead(302, { location: "/login" }); return res.end(); }
     if (req.url === "/login") { res.writeHead(200, { "content-type": "text/html" }); return res.end("<body style='background:#fff'>Sign in</body>"); }
+    if (req.url === "/embed-ok") { res.writeHead(200, { "content-type": "text/html" }); return res.end("<body style='background:#101010;color:#eee'><h1>Healthy</h1><iframe src='/missing' width=300 height=100></iframe></body>"); }
+    if (req.url === "/embed-bad") { res.writeHead(404, { "content-type": "text/html" }); return res.end("<body style='background:#101010'><h1>Gone</h1><iframe src='/light' width=300 height=100></iframe></body>"); }
+    if (req.url === "/transparent") { res.writeHead(200, { "content-type": "text/html" }); return res.end("<body style='color:#123456'><h1>Next-style page</h1><p>no body background</p></body>"); }
     if (req.url === "/missing") { res.writeHead(404, { "content-type": "text/html" }); return res.end("<h1>Not found</h1>"); }
     const r = routes[req.url];
     if (!r) { res.writeHead(404); return res.end(); }
@@ -187,4 +190,33 @@ test("toDirection keeps a family it could not check and says so", async () => {
   const d = await toDirection(SR({ display: "Foundry Serif", body: "Inter" }), { fetchFn: async () => ({ status: 503 }) });
   assert.equal(d.type.display, "Foundry Serif");
   assert.ok(d.sources.some((x) => x.detail === "could not check whether Foundry Serif is on Google Fonts"));
+});
+
+T("a healthy page with a broken embed is read, not refused", async () => {
+  const s = await readSite(base + "/embed-ok", { outDir: out() });
+  assert.equal(s.colors.find((c) => c.role === "ground").hex, "#101010");
+});
+
+T("a 404 page with a working embed is still refused", async () => {
+  await assert.rejects(() => readSite(base + "/embed-bad", { outDir: out() }), /HTTP 404/);
+});
+
+T("a thin brand (transparent body) exits 3 and still writes the read; an error page exits 1", async () => {
+  const dir = out();
+  const thin = await runNode([join(FIX, "../../scripts/read-site.mjs"), base + "/transparent", "--out", dir, "--direction", join(dir, "d.json")]);
+  assert.equal(thin.status, 3, thin.stderr);
+  assert.match(thin.stderr, /thin/i);
+  assert.ok(existsSync(join(dir, "site-read.json")), "the read is kept as context");
+  assert.ok(!existsSync(join(dir, "d.json")));
+  const err = await runNode([join(FIX, "../../scripts/read-site.mjs"), base + "/missing", "--out", out(), "--direction", join(dir, "e.json")]);
+  assert.equal(err.status, 1);
+});
+
+test("monogram letters are letters: punctuation and emoji are skipped", async () => {
+  const f = fakeFetch(new Set(["Inter"]));
+  const sr = (name) => ({ ...SR({ display: "Inter", body: "Inter" }), name });
+  assert.equal((await toDirection(sr("★ Acme & Co"), { fetchFn: f })).mark.letters, "AC");
+  assert.equal((await toDirection(sr("😀 Zed"), { fetchFn: f })).mark.letters, "Z");
+  assert.equal((await toDirection(sr("😀 😀"), { fetchFn: f })).mark.letters, "A", "falls back to the host's first letter");
+  assert.equal((await toDirection(sr("Élan Vital"), { fetchFn: f })).mark.letters, "ÉV");
 });

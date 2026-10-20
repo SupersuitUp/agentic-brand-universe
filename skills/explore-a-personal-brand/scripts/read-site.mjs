@@ -2,7 +2,8 @@
 // read-site.mjs: read a live website's brand (colors, fonts, logo, icons, screenshots)
 // with a throwaway headless Chrome. Usage: read-site.mjs <url> --out <dir> [--direction <out.json>]
 // --direction also writes toDirection's output (the "site is the brand" direction). Exit 1 on an
-// HTTP error, a login redirect or an unreachable host.
+// HTTP error, a login redirect or an unreachable host (no usable read); exit 3 when the read worked
+// but the site is too thin to make a direction from (site-read.json is still written).
 // Writes <dir>/site-read.json and returns the same object. Node 22+.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
@@ -130,13 +131,15 @@ export async function readSite(url, { outDir } = {}) {
   try {
     await c.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
     await c.send("Network.enable");
-    let doc = null;
-    c.on("Network.responseReceived", (e) => { if (e.type === "Document") doc = e.response; });
+    // Only the MAIN frame's document counts: a broken or login-gated iframe must not decide the read.
+    const docs = new Map();
+    c.on("Network.responseReceived", (e) => { if (e.type === "Document") docs.set(e.frameId, e.response); });
     const loaded = c.once("Page.loadEventFired", 20000);
     loaded.catch(() => {}); // a navigation error below throws first; do not leave this rejection unhandled
     const nav = await c.send("Page.navigate", { url });
     if (nav.errorText) throw new Error(`read-site: could not load ${url} (${nav.errorText})`);
     await loaded;
+    const doc = docs.get(nav.frameId) || null;
     if (doc && doc.status >= 400) throw new Error(`read-site: ${url} answered HTTP ${doc.status}, which is an error page, not the brand`);
     if (doc && doc.url !== url && /\/(log-?in|sign-?in|sso|auth|account\/login)(\/|\?|$)/i.test(new URL(doc.url).pathname + new URL(doc.url).search)) {
       throw new Error(`read-site: ${url} redirected to ${doc.url}, which looks like a login page, not the brand`);
@@ -181,6 +184,9 @@ export async function readSite(url, { outDir } = {}) {
 
 const GENERIC = new Set(["serif", "sans-serif", "monospace", "system-ui", "ui-sans-serif", "ui-serif", "-apple-system", "blinkmacsystemfont", "helvetica neue", "helvetica", "arial", "georgia", "times new roman", "times", "segoe ui", "roboto"]);
 
+/** The read worked but the site declares too little to make a direction from (exit code 3). */
+export class ThinBrandError extends Error {}
+
 /**
  * The "site is me" case: a valid direction taken straight from a site read. A family that is not
  * on Google Fonts is replaced by the closest Google family and the original recorded in `sources`.
@@ -190,7 +196,7 @@ export async function toDirection(sr, opts = {}) {
   const role = (r) => sr.colors.find((c) => c.role === r)?.hex;
   const ground = role("ground"), ink = role("text");
   if (!ground || !ink) {
-    throw new Error("cannot make a direction from this site: " + Object.entries(sr.unresolved || {}).map(([k, v]) => `${k}: ${v}`).join("; "));
+    throw new ThinBrandError("cannot make a direction from this site (a thin brand: the read is kept as context): " + Object.entries(sr.unresolved || {}).map(([k, v]) => `${k}: ${v}`).join("; "));
   }
   const accent = role("accent") || sr.colors.find((c) => c.role === "other")?.hex || ink;
   const sources = [{ choice: "palette", from: "site", detail: sr.url }];
@@ -204,7 +210,11 @@ export async function toDirection(sr, opts = {}) {
   };
   const body = await pick("body", "Inter");
   const display = await pick("display", body);
-  const letters = (sr.name || "X").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "X";
+  // Monogram letters are LETTERS: the first letter of each of the first two words that have one.
+  // (w[0] can be punctuation or half an emoji.)
+  const firstLetter = (w) => Array.from(w).find((ch) => /\p{L}/u.test(ch));
+  let letters = (sr.name || "").split(/\s+/).map(firstLetter).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  if (!letters) { try { letters = firstLetter(new URL(sr.url).hostname.replace(/^www\./, "")) || ""; } catch {} letters = (letters || "X").toUpperCase(); }
   const d = {
     name: sr.name, concept: sr.description || `The brand of ${sr.url}`,
     palette: { ground, ink, accent },
@@ -224,12 +234,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const url = a.find((x, i) => !x.startsWith("--") && !valued.has(i));
   const out = flag("--out"), dirOut = flag("--direction");
   if (!url || !out) { console.error("usage: read-site.mjs <url> --out <dir> [--direction <direction.json>]"); process.exit(2); }
+  let r;
+  try { r = await readSite(url, { outDir: out }); }
+  catch (e) { console.error(e.message); process.exit(1); }   // 1: no usable read (error page, login, unreachable)
   try {
-    const r = await readSite(url, { outDir: out });
     if (dirOut) {
       writeFileSync(dirOut, JSON.stringify(await toDirection(r), null, 2) + "\n");
       console.error("direction written to " + dirOut);
     }
+  } catch (e) {
     console.log(JSON.stringify(r, null, 2));
-  } catch (e) { console.error(e.message); process.exit(1); }
+    console.error(e.message);
+    process.exit(e instanceof ThinBrandError ? 3 : 1);        // 3: read ok, thin brand
+  }
+  console.log(JSON.stringify(r, null, 2));
 }

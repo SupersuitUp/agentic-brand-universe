@@ -77,8 +77,12 @@ alternatives written in step 5. For the "not really the brand" answer, omit `--d
 two screenshots yourself.
 
 Failures, each with its action:
-- **HTTP error, a redirect to a login page, or an unreachable host:** `read-site` exits 1 and says which.
+- **HTTP error, a redirect to a login page, or an unreachable host:** `read-site` exits **1** and says which.
   Treat it as no site: tell the operator in one line and go to the interview. Never read an error page as a brand.
+- **Exit 3** means the read worked but the site declares too little to make a direction from (a transparent
+  body and html is common in Next and React sites, so no ground can be read). **Take the thin-read branch, never "no site":**
+  say so in one line, keep `site-read.json` and the screenshots as context for the interview (name, fonts, logo),
+  and write directions from the interview. `--direction` wrote nothing; the site is not direction 1.
 - **A thin read** (default colors, no logo, system fonts, `unresolved` set): **say so plainly**
   ("there is not much here to build on: one color, no mark") and lean on the interview. Never pad it into a confident palette.
 - **A raster logo only** (no SVG): the mark is drawn as a monogram instead, and the raster is shown beside the board
