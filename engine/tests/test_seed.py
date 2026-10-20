@@ -98,6 +98,63 @@ class SeedTest(unittest.TestCase):
             self.assertTrue(r.exists(), r)
             self.assertEqual(json.loads(r.read_text())["generator"], "abu seed")
 
+    def test_favicon_wraps_a_bare_mark_on_the_accent(self):
+        self.run_seed()
+        fav = (self.root / "marks/favicon.svg").read_text()
+        self.assertIn('viewBox="0 0 100 100"', fav)
+        self.assertIn('fill="#c8743a"', fav)          # the accent tile
+        self.assertIn("<text>WF</text>", fav)          # the mark rides inside it
+        self.assertEqual(self.j("universe.json")["identity"]["favicon"], "marks/favicon.svg")
+
+    def test_favicon_keeps_a_mark_that_has_its_own_background(self):
+        own = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#123456"/><path d="M0 0L9 9Z" fill="#fff"/></svg>'
+        seed.seed_universe(self.root, D, brief_md="b", mark_svg=own)
+        self.assertEqual((self.root / "marks/favicon.svg").read_text(), own)
+
+    def test_favicon_is_well_formed_when_the_mark_has_its_own_size(self):
+        import xml.dom.minidom as m
+        bare = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40"><path d="M0 0L9 9Z"/></svg>'
+        seed.seed_universe(self.root, D, brief_md="b", mark_svg=bare)
+        fav = (self.root / "marks/favicon.svg").read_text()
+        m.parseString(fav)
+        self.assertIn('viewBox="0 0 40 40"', fav)
+        self.assertEqual(fav.count("width="), 3)  # outer svg, tile rect, nested mark: no duplicates
+
+    def test_favicon_has_a_recipe(self):
+        self.run_seed()
+        r = json.loads((self.root / "marks/favicon.svg.recipe.json").read_text())
+        self.assertEqual(r["generator"], "abu seed")
+
+    def test_light_accent_validates(self):
+        d = json.loads(json.dumps(D)); d["palette"]["lightAccent"] = "nope"
+        self.assertTrue(any("palette.lightAccent" in e for e in validate_direction(d)))
+        d["palette"]["lightAccent"] = "#a5552a"
+        self.assertEqual(validate_direction(d), [])
+
+    def test_artifact_light_uses_the_light_accent(self):
+        d = json.loads(json.dumps(D)); d["palette"]["lightAccent"] = "#a5552a"
+        self.run_seed(d)
+        self.assertEqual(self.j("canon/craft/palette.json")["tokens"]["lightAccent"], "#a5552a")
+        roles = self.j("universe.json")["identity"]["surfaces"]["artifact-light"]["roles"]
+        self.assertEqual(roles["accent"], "lightAccent")
+
+    def test_artifact_light_falls_back_to_accent_without_a_light_accent(self):
+        self.run_seed()
+        roles = self.j("universe.json")["identity"]["surfaces"]["artifact-light"]["roles"]
+        self.assertEqual(roles["accent"], "accent")
+
+    @unittest.skipUnless((Path.home() / ".freedom/bin/freedom-lib").exists(), "Supersuit not installed")
+    def test_emit_artifact_light_returns_the_light_accent(self):
+        import subprocess
+        d = json.loads(json.dumps(D)); d["palette"]["lightAccent"] = "#a5552a"
+        self.run_seed(d)
+        out = subprocess.run([str(Path.home() / ".freedom/bin/freedom-lib"), "run", ".agents/lib/freedom-brand.mjs",
+                              "emit", "--universe", str(self.root), "--surface", "artifact-light"],
+                             capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        e = json.loads(out.stdout)
+        self.assertEqual((e["ground"], e["text"], e["accent"]), ("#f6f2ea", "#1a1a1a", "#a5552a"))
+
     def test_universe_still_validates(self):
         from agenticstory.store import CanonStore
         self.run_seed()

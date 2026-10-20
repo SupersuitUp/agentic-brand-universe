@@ -8,7 +8,7 @@ export function validateDirection(d) {
   let pal = d.palette;
   if (!pal || typeof pal !== "object") { errs.push("palette: required object"); pal = {}; }
   for (const k of ["ground", "ink", "accent"]) if (!(k in pal)) errs.push(`palette.${k}: required`);
-  for (const k of ["ground", "ink", "accent", "lightGround", "lightInk"]) {
+  for (const k of ["ground", "ink", "accent", "lightGround", "lightInk", "lightAccent"]) {
     if (k in pal && !(typeof pal[k] === "string" && HEX.test(pal[k]))) errs.push(`palette.${k}: not a hex color: ${JSON.stringify(pal[k])}`);
   }
   let t = d.type;

@@ -10,6 +10,7 @@ import { ratio, fixContrast } from "../scripts/contrast.mjs";
 import { findChrome } from "../scripts/cdp.mjs";
 import { renderBoard, boardHtml } from "../scripts/render-board.mjs";
 import { monogramSvg } from "../scripts/mark.mjs";
+import { validateDirection } from "../scripts/direction.mjs";
 
 let HAVE = true;
 try { findChrome(); } catch { HAVE = false; }
@@ -153,4 +154,44 @@ T("a font that could not be checked is kept and named on the board", async () =>
   assert.equal(r.standIns.length, 0);
   assert.ok(r.direction.sources.some((x) => x.detail.startsWith("could not check")));
   assert.match(boardHtml(D, [], "<svg/>", [], ["Fraunces"]), /could not check whether Fraunces is on Google Fonts/);
+});
+
+const LIGHT = () => { const d = structuredClone(D); d.palette.accent = "#e2703a"; d.palette.lightGround = "#f7f3ea"; d.palette.lightInk = "#1a1a1a"; return d; };
+
+test("fixContrast derives a light accent that reaches 4.5:1 on the light ground", () => {
+  const d = LIGHT();
+  assert.ok(ratio("#e2703a", "#f7f3ea") < 3, "the e2e case: the dark accent is weak on light");
+  const { direction, notes } = fixContrast(d);
+  assert.ok(ratio(direction.palette.lightAccent, "#f7f3ea") >= 4.5);
+  assert.equal(direction.palette.accent, "#e2703a", "the dark-mode accent is untouched");
+  assert.ok(notes.some((n) => n.startsWith("light accent")));
+  assert.equal(d.palette.lightAccent, undefined, "input untouched");
+});
+
+test("fixContrast keeps a passing lightAccent, lifts a failing one, and adds none without a light ground", () => {
+  const ok = LIGHT(); ok.palette.lightAccent = "#8a3a10";
+  assert.equal(fixContrast(ok).direction.palette.lightAccent, "#8a3a10");
+  const weak = LIGHT(); weak.palette.lightAccent = "#e2703a";
+  assert.ok(ratio(fixContrast(weak).direction.palette.lightAccent, "#f7f3ea") >= 4.5);
+  assert.equal(fixContrast(D).direction.palette.lightAccent, undefined);
+});
+
+test("the derived light accent is a darkening of the accent (same hue family)", () => {
+  const la = fixContrast(LIGHT()).direction.palette.lightAccent;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(la.slice(i, i + 2), 16));
+  assert.ok(r >= g && g >= b, la);
+});
+
+test("the JS validator knows lightAccent", () => {
+  const d = LIGHT(); d.palette.lightAccent = "nope";
+  assert.ok(validateDirection(d).some((e) => e.startsWith("palette.lightAccent")));
+  d.palette.lightAccent = "#8a3a10";
+  assert.deepEqual(validateDirection(d), []);
+});
+
+test("the board shows the light accent", () => {
+  const { direction } = fixContrast(LIGHT());
+  const html = boardHtml(direction, [], "<svg/>");
+  assert.match(html, /Light accent/);
+  assert.ok(html.includes(direction.palette.lightAccent));
 });

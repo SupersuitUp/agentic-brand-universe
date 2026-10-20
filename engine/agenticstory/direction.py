@@ -11,7 +11,7 @@ from pathlib import Path
 
 HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 REQUIRED_COLORS = ("ground", "ink", "accent")
-OPTIONAL_COLORS = ("lightGround", "lightInk")
+OPTIONAL_COLORS = ("lightGround", "lightInk", "lightAccent")
 
 
 def load_direction(path) -> dict:

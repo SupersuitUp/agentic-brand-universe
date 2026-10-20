@@ -31,9 +31,8 @@ export function lift(fg, bg, min) {
 
 /**
  * Lift ink to 4.5:1 and accent to 4.5:1 (the accent is used as link text) against ground, and
- * the light ink against the light ground. Pure. Every note states what actually happened,
- * including when the target was not reached. The accent is shared by the dark and light
- * grounds, so a weak accent on the light ground is reported, not adjusted.
+ * the light ink against the light ground, and derives `palette.lightAccent` when the accent fails on the light ground. Pure. Every note states what actually happened,
+ * including when the target was not reached.
  */
 export function fixContrast(direction) {
   const d = JSON.parse(JSON.stringify(direction));
@@ -53,8 +52,19 @@ export function fixContrast(direction) {
   fix("ink", "ground", 4.5, "ink");
   fix("accent", "ground", 4.5, "accent");
   fix("lightInk", "lightGround", 4.5, "light ink");
-  if (p.lightGround && ratio(p.accent, p.lightGround) < 3) {
-    notes.push(`accent ${p.accent} on light ground ${p.lightGround} is ${ratio(p.accent, p.lightGround).toFixed(1)}:1; not adjusted (one accent serves both grounds)`);
+  // Light mode: the dark-mode accent is rarely right on a light ground. When it fails there, derive a
+  // lightAccent: the closest darkening of the accent (or of a weak supplied lightAccent) that reaches 4.5:1.
+  if (p.lightGround) {
+    const base = p.lightAccent || p.accent;
+    const before = ratio(base, p.lightGround);
+    if (before < 4.5) {
+      const next = lift(base, p.lightGround, 4.5);
+      const after = ratio(next, p.lightGround);
+      notes.push(after >= 4.5
+        ? `light accent ${base} on ${p.lightGround} was ${before.toFixed(1)}:1, darkened to ${next} (${after.toFixed(1)}:1)`
+        : `light accent ${base} on ${p.lightGround} was ${before.toFixed(1)}:1 and could only be darkened to ${next} (${after.toFixed(1)}:1; target 4.5:1 not reached)`);
+      p.lightAccent = next;
+    }
   }
   return { direction: d, notes };
 }

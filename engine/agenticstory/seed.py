@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -18,6 +19,26 @@ from .direction import validate_direction
 def fonts_url(display: str, body: str) -> str:
     return ("https://fonts.googleapis.com/css2?family=" + quote_plus(display) + ":wght@400;600"
             "&family=" + quote_plus(body) + ":wght@400;500;600&display=swap")
+
+
+_OWN_BG = re.compile(r"<svg[^>]*>\s*<rect[^>]*width=[\"'](?:100%|\d+(?:\.\d+)?)[\"'][^>]*height=[\"'](?:100%|\d+(?:\.\d+)?)[\"']", re.I)
+_VIEWBOX = re.compile(r"viewBox=[\"']([^\"']+)[\"']")
+
+
+def favicon_svg(mark_svg: str, accent: str) -> str:
+    """A square tab icon from the mark. A mark that already opens with a full-size background rect
+    is used as it is; any other mark is nested, inset, on an accent tile with a square viewBox."""
+    if _OWN_BG.search(mark_svg):
+        return mark_svg
+    vb = _VIEWBOX.search(mark_svg)
+    box = vb.group(1) if vb else "0 0 100 100"
+    inner = re.sub(r"^\s*<\?xml[^>]*\?>\s*", "", mark_svg)
+    def root(m):  # drop the root's own size, position and namespace; the tile supplies them
+        attrs = re.sub(r'\s(?:xmlns|width|height|x|y|viewBox)=("[^"]*"|\'[^\']*\')', "", m.group(1))
+        return f'<svg x="14" y="14" width="72" height="72" viewBox="{box}"{attrs}>'
+    inner = re.sub(r"<svg\b([^>]*)>", root, inner, count=1)
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">'
+            f'<rect width="100" height="100" rx="14" fill="{accent}"/>{inner.strip()}</svg>\n')
 
 
 def seed_universe(root, direction: dict, *, brief_md: str, board_png=None, mark_svg: str) -> list[str]:
@@ -44,7 +65,7 @@ def seed_universe(root, direction: dict, *, brief_md: str, board_png=None, mark_
         written.append(str(r))
 
     pal, typ = direction["palette"], direction["type"]
-    tokens = {k: pal[k] for k in ("ground", "ink", "accent", "lightGround", "lightInk") if k in pal}
+    tokens = {k: pal[k] for k in ("ground", "ink", "accent", "lightGround", "lightInk", "lightAccent") if k in pal}
     write("canon/craft/palette.json", json.dumps({
         "id": "palette", "kind": "register-rule",
         "summary": f"{direction['name']} palette: ground, ink and accent tokens a surface reads by role.",
@@ -55,6 +76,7 @@ def seed_universe(root, direction: dict, *, brief_md: str, board_png=None, mark_
         "display": typ["display"], "body": typ["body"],
         "fontsUrl": fonts_url(typ["display"], typ["body"])}, indent=2) + "\n")
     write("marks/mark.svg", mark_svg)
+    write("marks/favicon.svg", favicon_svg(mark_svg, pal["accent"]))
     write("canon/craft/brand-brief.md", brief_md)
     if board_png is not None:
         write("reference/register/board.png", Path(board_png).read_bytes(),
@@ -69,10 +91,12 @@ def seed_universe(root, direction: dict, *, brief_md: str, board_png=None, mark_
     if "lightGround" in pal and "lightInk" in pal:
         surfaces["artifact-light"] = {
             "tokens": "canon/craft/palette.json#tokens",
-            "roles": {"ground": "lightGround", "text": "lightInk", "accent": "accent"},
+            "roles": {"ground": "lightGround", "text": "lightInk",
+                      "accent": "lightAccent" if "lightAccent" in pal else "accent"},
             "display": typ["display"]}
     ident["surfaces"] = surfaces
     ident["mark"] = "marks/mark.svg"
+    ident["favicon"] = "marks/favicon.svg"
     ident["theme"] = direction["name"]
     if board_png is not None:
         ident.setdefault("register", {})["anchor"] = "reference/register/board.png"

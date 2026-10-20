@@ -49,6 +49,8 @@ h1{font-size:34px;line-height:1.1;margin:0 0 8px}
 <h1>${esc(direction.name)}</h1><p class="concept">${esc(direction.concept || "")}</p>
 <div class="lbl">Palette</div>
 <div class="sws">${swatch("Ground", p.ground)}${swatch("Ink", p.ink)}${swatch("Accent", p.accent)}</div>
+${p.lightGround ? `<div class="lbl">Light mode</div>
+<div class="sws">${swatch("Light ground", p.lightGround)}${swatch("Light ink", p.lightInk || p.ink)}${swatch("Light accent", p.lightAccent || p.accent)}</div>` : ""}
 <div class="lbl">Type</div>
 <div class="spec"><div class="d">${esc(safeFamily(t.display))} ${esc(direction.name.split(" ")[0])}</div><div class="b">${esc(safeFamily(t.body))}: Small, careful work for people who notice the details.</div></div>
 <div class="lbl">Mark</div>
@@ -58,7 +60,7 @@ h1{font-size:34px;line-height:1.1;margin:0 0 8px}
 <p>Every piece starts as a rough sketch and gets simpler on each pass until only the useful parts remain.</p>
 <p>Notes and drafts are collected in one place, <a href="#">read the latest entry</a>.</p></div>
 <div class="lbl">Contrast</div>
-<div class="c">text on ground ${r(p.ink, p.ground)}:1<br>accent on ground ${r(p.accent, p.ground)}:1</div>
+<div class="c">text on ground ${r(p.ink, p.ground)}:1<br>accent on ground ${r(p.accent, p.ground)}:1${p.lightGround ? `<br>light accent on light ground ${r(p.lightAccent || p.accent, p.lightGround)}:1` : ""}</div>
 ${notes.map((n) => `<div class="note">Adjusted: ${esc(n)}</div>`).join("")}
 <div id="foot" class="note">${[...standIns.map((x) => `${esc(x.to)} stood in for ${esc(x.from)} (${esc(x.reason)})`), ...unchecked.map((f) => `could not check whether ${esc(f)} is on Google Fonts`)].join("<br>")}</div>
 </body></html>`;
