@@ -164,7 +164,7 @@ U=<repos>/<slug>-universe
 abu init "$U" --name <slug>-brand
 abu seed "$U" --from <work>/<chosen>.fixed.json --brief <work>/brand-brief.md \
     --mark <work>/<chosen>.mark.svg --board <work>/<chosen>.png
-node ~/.freedom/preview/freedom-dev/.agents/lib/freedom-brand.mjs emit --universe "$U" --surface artifact
+~/.freedom/bin/freedom-lib run .agents/lib/freedom-brand.mjs emit --universe "$U" --surface artifact
 ```
 
 - Write `brand-brief.md` first, in the operator's own words from the interview: who the pages are for, the
@@ -174,6 +174,8 @@ node ~/.freedom/preview/freedom-dev/.agents/lib/freedom-brand.mjs emit --univers
   colors by role, and makes the board the register anchor. If it rejects the direction it names the field:
   fix that field in the `.json`, re-render the board, and seed again.
 - **Success is the `emit` line** printing the approved ground, text, accent and display. If it does not, do not call the universe done.
+  `freedom-lib` picks the newest installed Supersuit plugin that has the file. **If `~/.freedom/bin/freedom-lib` is
+  missing, say Supersuit is not installed and skip only the emit check, never the universe.**
 - Make it a private repo (`abu init` does not run `git init`):
   `git -C "$U" init -q && git -C "$U" add . && git -C "$U" commit -qm "Seed the brand universe"`, then
   `gh repo create <owner>/<slug>-universe --private --source "$U" --push`.

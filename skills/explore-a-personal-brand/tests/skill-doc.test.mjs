@@ -109,3 +109,9 @@ test("failure handling: each has its action", () => {
   assert.match(body, /A raster logo only[\s\S]*monogram[\s\S]*potracer/);
   assert.match(body, /Offline: say so and stop/);
 });
+
+test("the emit check runs through the Supersuit resolver, never a preview path", () => {
+  assert.match(body, /~\/\.freedom\/bin\/freedom-lib run \.agents\/lib\/freedom-brand\.mjs emit --universe "\$U" --surface artifact/);
+  assert.match(body, /freedom-lib` is\s+missing, say Supersuit is not installed and skip only the emit check, never the universe/);
+  assert.ok(!skill.includes(".freedom/preview"));
+});
