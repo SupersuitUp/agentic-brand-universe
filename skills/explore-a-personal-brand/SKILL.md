@@ -12,13 +12,22 @@ their yes.
 
 ## Setup: where things are
 
-Locate ABU the way the other ABU skills do (`make-a-book`'s pattern), never a hardcoded home path:
+**Shell state does not persist between tool calls**, so definitions made in one block are gone in the next.
+Write the definitions once to `<work>/setup.sh` and **begin every later bash block with `. <work>/setup.sh`**
+(the blocks below do). Locate ABU the way the other ABU skills do (`make-a-book`'s pattern), taking the newest
+cached version when several exist, never a hardcoded home path:
 
 ```bash
-ABU=$(python3 -c "import agenticstory,pathlib;print(pathlib.Path(agenticstory.__file__).resolve().parents[2])" 2>/dev/null || echo ~/.claude/plugins/cache/garysheng/abu/*/)
+mkdir -p <work> && cat > <work>/setup.sh <<'SETUP'
+ABU=$(python3 -c "import agenticstory,pathlib;print(pathlib.Path(agenticstory.__file__).resolve().parents[2])" 2>/dev/null || ls -d ~/.claude/plugins/cache/garysheng/abu/*/ 2>/dev/null | sort -V | tail -1)
+[ -n "$ABU" ] || { echo "ABU is not installed: run abu:onboard first"; return 1 2>/dev/null || exit 1; }
 SK="$ABU/skills/explore-a-personal-brand/scripts"     # read-site.mjs, render-board.mjs, ...
 abu() { node "$ABU/bin/abu.mjs" "$@"; }               # the engine, from any directory; needs python3
+SETUP
+. <work>/setup.sh
 ```
+
+**If ABU is not found, say ABU is not installed and point at `abu:onboard`; do nothing else.**
 
 - **`<work>`** is a scratch folder for this run: `<workspace>/superprojects/<slug>/brand-work/` when the
   operator has a superproject for it, otherwise `mktemp -d`. Boards, directions and the brief live here until the yes.
@@ -55,6 +64,7 @@ The off-list answer lives in the question text, because a preview would cost the
 ## 3. Read the site, when there is one
 
 ```bash
+. <work>/setup.sh
 node "$SK/read-site.mjs" <url> --out <work>/site --direction <work>/a.json
 ```
 
@@ -99,7 +109,7 @@ Write three `direction.json` files (shape in `scripts/direction.mjs`, mirrored b
 ```json
 { "name": "Night Workshop", "concept": "one line",
   "palette": { "ground": "#101418", "ink": "#e9e4da", "accent": "#c8743a",
-               "lightGround": "#f6f2ea", "lightInk": "#1a1a1a" },
+               "lightGround": "#f6f2ea", "lightInk": "#1a1a1a", "lightAccent": "#a5552a" },
   "type": { "display": "Fraunces", "body": "Inter" },
   "mark": { "kind": "monogram", "letters": "WF", "treatment": "serif-ligature" },
   "sources": [{ "choice": "accent", "from": "interview", "detail": "q3: burnt orange" }] }
@@ -118,6 +128,7 @@ SVG, never a raster.
 ## 6. Render all three boards in parallel
 
 ```bash
+. <work>/setup.sh
 node "$SK/render-board.mjs" <work>/a.json --out <work>/a.png > <work>/a.log 2>&1 & pa=$!
 node "$SK/render-board.mjs" <work>/b.json --out <work>/b.png > <work>/b.log 2>&1 & pb=$!
 node "$SK/render-board.mjs" <work>/c.json --out <work>/c.png > <work>/c.log 2>&1 & pc=$!
@@ -160,6 +171,7 @@ approved on a pick alone, and do not describe a candidate as the brand.
 ## 9. On yes: make the universe
 
 ```bash
+. <work>/setup.sh
 U=<repos>/<slug>-universe
 abu init "$U" --name <slug>-brand
 abu seed "$U" --from <work>/<chosen>.fixed.json --brief <work>/brand-brief.md \
@@ -170,7 +182,7 @@ abu seed "$U" --from <work>/<chosen>.fixed.json --brief <work>/brand-brief.md \
 - Write `brand-brief.md` first, in the operator's own words from the interview: who the pages are for, the
   three words, what they admire, what they refuse, what was already theirs, and the concept in one line.
   It is what a future session reads before touching the brand.
-- `abu seed` writes the palette, type and mark into canon, declares `identity.surfaces` so a page reads the
+- `abu seed` writes the palette (with the light accent), type, mark and `marks/favicon.svg` (the tab icon) into canon, declares `identity.surfaces` so a page reads the
   colors by role, and makes the board the register anchor. If it rejects the direction it names the field:
   fix that field in the `.json`, re-render the board, and seed again.
 - **Success is the `emit` line** printing the approved ground, text, accent and display. If it does not, do not call the universe done.

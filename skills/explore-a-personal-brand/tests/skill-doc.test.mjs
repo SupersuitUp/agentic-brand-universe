@@ -115,3 +115,16 @@ test("the emit check runs through the Supersuit resolver, never a preview path",
   assert.match(body, /freedom-lib` is\s+missing, say Supersuit is not installed and skip only the emit check, never the universe/);
   assert.ok(!skill.includes(".freedom/preview"));
 });
+
+test("setup: shell state does not persist, so every block that needs it re-sources setup.sh", () => {
+  assert.match(body, /Shell state does not persist between tool calls/);
+  const blocks = [...body.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1]);
+  const using = blocks.filter((b) => /\$SK|\babu \w|\$ABU/.test(b) && !b.includes("cat > <work>/setup.sh"));
+  assert.ok(using.length >= 3);
+  for (const b of using) assert.ok(b.startsWith(". <work>/setup.sh\n"), b.slice(0, 60));
+});
+
+test("ABU discovery takes the newest cached version and says what to do when none is found", () => {
+  assert.match(body, /ls -d ~\/\.claude\/plugins\/cache\/garysheng\/abu\/\*\/[^\n]*sort -V \| tail -1/);
+  assert.match(body, /ABU is not installed: run abu:onboard/);
+});
