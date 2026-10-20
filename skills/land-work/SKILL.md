@@ -3,7 +3,7 @@ name: land-work
 description: Merge a finished work branch home instead of leaving it parked, in ANY git repo (a universe, a platform repo, a site, anything). Runs at the START of a pipeline to drain previously-blocked merges and at the END to land the run's own branch, and it queues rather than parking when a sibling agent session holds the target branch. Use when a run is finishing, when a report is about to say "branch parked / not merged / left for you to merge", when worktrees have piled up, when the operator says "merge it", "use your judgment on the merge", "land this", "clean up the worktrees", or "why is this never merged". NOT for pushing to a remote or opening a PR.
 ---
 
-> `$ABU` below is wherever ABU is installed. Find it with `ABU=$(python3 -c "import agenticstory,pathlib;print(pathlib.Path(agenticstory.__file__).resolve().parents[2])" 2>/dev/null || echo ~/.claude/plugins/cache/garysheng/abu/*/)`, or just ask the harness; never hardcode a home directory.
+> `$ABU` below is wherever ABU is installed. Find it with `ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}`, or just ask the harness; never hardcode a home directory.
 
 
 # Land Work

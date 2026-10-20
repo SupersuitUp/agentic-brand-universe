@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 const CLI = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../../engine/agenticstory/cli.py"), "utf8");
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,7 +87,7 @@ test("the kept-site route is runnable: the exact command, and it becomes directi
 });
 
 test("paths resolve from anywhere: ABU is located the make-a-book way and abu has an invocation", () => {
-  assert.match(body, /ABU=\$\(python3 -c "import agenticstory,pathlib;/);
+  assert.match(body, /ABU=\$\{CLAUDE_PLUGIN_ROOT:-\$\(ls -d/);
   assert.match(body, /abu\(\) \{ node "\$ABU\/bin\/abu\.mjs"/);
   for (const t of ["<work>", "<repos>", "<owner>", "<slug>"]) assert.ok(body.includes(`**\`${t}\`**`), t + " is defined");
   assert.doesNotMatch(body, /node skills\/explore-a-personal-brand/);
@@ -121,10 +123,56 @@ test("setup: shell state does not persist, so every block that needs it re-sourc
   const blocks = [...body.matchAll(/```bash\n([\s\S]*?)```/g)].map((m) => m[1]);
   const using = blocks.filter((b) => /\$SK|\babu \w|\$ABU/.test(b) && !b.includes("cat > <work>/setup.sh"));
   assert.ok(using.length >= 3);
-  for (const b of using) assert.ok(b.startsWith(". <work>/setup.sh\n"), b.slice(0, 60));
+  for (const b of using) assert.ok(b.startsWith(". <work>/setup.sh || exit 1\n"), b.slice(0, 60));
 });
 
-test("ABU discovery takes the newest cached version and says what to do when none is found", () => {
-  assert.match(body, /ls -d ~\/\.claude\/plugins\/cache\/garysheng\/abu\/\*\/[^\n]*sort -V \| tail -1/);
-  assert.match(body, /ABU is not installed: run abu:onboard/);
+
+// The setup snippet, run for real: from /tmp, with HOME pointing at a fake plugin cache named like
+// the marketplace (.claude-plugin/marketplace.json "name"), never like the author.
+const SETUP = body.match(/<<'SETUP'\n([\s\S]*?)\nSETUP/)[1];
+const MARKET = JSON.parse(readFileSync(join(ROOT, "../../.claude-plugin/marketplace.json"), "utf8")).name;
+function runSetup({ versions, pluginRoot }) {
+  const home = mkdtempSync(join(tmpdir(), "fakehome-"));
+  for (const v of versions) {
+    const d = join(home, ".claude/plugins/cache", MARKET, "abu", v, "skills/explore-a-personal-brand/scripts");
+    mkdirSync(d, { recursive: true }); writeFileSync(join(d, "read-site.mjs"), "// fake");
+    mkdirSync(join(home, ".claude/plugins/cache", MARKET, "abu", v, "bin"), { recursive: true });
+    writeFileSync(join(home, ".claude/plugins/cache", MARKET, "abu", v, "bin/abu.mjs"), "// fake");
+  }
+  const f = join(home, "setup.sh"); writeFileSync(f, SETUP);
+  const env = { PATH: process.env.PATH, HOME: home, ...(pluginRoot ? { CLAUDE_PLUGIN_ROOT: pluginRoot } : {}) };
+  const r = spawnSync("bash", ["-c", `. ${f} || exit 7; echo "$SK"`], { cwd: "/tmp", env, encoding: "utf8" });
+  return { ...r, home };
+}
+
+test("setup finds the NEWEST cached ABU from any directory", () => {
+  const r = runSetup({ versions: ["1.9.0", "1.10.0", "1.2.0"] });
+  assert.equal(r.status, 0, r.stderr);
+  const sk = r.stdout.trim();
+  assert.ok(sk.includes("/abu/1.10.0/"), sk);
+  assert.ok(existsSync(join(sk, "read-site.mjs")));
+});
+
+test("setup prefers CLAUDE_PLUGIN_ROOT when set", () => {
+  const root = mkdtempSync(join(tmpdir(), "root-"));
+  mkdirSync(join(root, "bin")); writeFileSync(join(root, "bin/abu.mjs"), "// fake");
+  const r = runSetup({ versions: ["1.9.0"], pluginRoot: root });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stdout.trim().startsWith(root));
+});
+
+test("setup with no ABU installed stops the calling block and points at abu:onboard", () => {
+  const r = runSetup({ versions: [] });
+  assert.notEqual(r.status, 0);
+  assert.equal(r.status, 7, "the sourcing block's `|| exit 1` path is reached");
+  assert.match(r.stdout + r.stderr, /abu:onboard/);
+});
+
+test("make-a-book, book-doctor and land-work use the same corrected discovery", () => {
+  for (const sk of ["make-a-book", "book-doctor", "land-work"]) {
+    const t = readFileSync(join(ROOT, "..", sk, "SKILL.md"), "utf8");
+    assert.ok(t.includes("${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}"), sk);
+    assert.ok(!t.includes("cache/garysheng"), sk);
+  }
+  assert.ok(!skill.includes("cache/garysheng"));
 });

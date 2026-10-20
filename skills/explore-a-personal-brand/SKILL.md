@@ -13,18 +13,18 @@ their yes.
 ## Setup: where things are
 
 **Shell state does not persist between tool calls**, so definitions made in one block are gone in the next.
-Write the definitions once to `<work>/setup.sh` and **begin every later bash block with `. <work>/setup.sh`**
-(the blocks below do). Locate ABU the way the other ABU skills do (`make-a-book`'s pattern), taking the newest
-cached version when several exist, never a hardcoded home path:
+Write the definitions once to `<work>/setup.sh` and **begin every later bash block with `. <work>/setup.sh || exit 1`**
+(the blocks below do). Locate ABU the way the other ABU skills do (`make-a-book`'s pattern): `${CLAUDE_PLUGIN_ROOT}` when the harness sets it, else the newest cached
+version under any marketplace name, never a hardcoded home path:
 
 ```bash
 mkdir -p <work> && cat > <work>/setup.sh <<'SETUP'
-ABU=$(python3 -c "import agenticstory,pathlib;print(pathlib.Path(agenticstory.__file__).resolve().parents[2])" 2>/dev/null || ls -d ~/.claude/plugins/cache/garysheng/abu/*/ 2>/dev/null | sort -V | tail -1)
-[ -n "$ABU" ] || { echo "ABU is not installed: run abu:onboard first"; return 1 2>/dev/null || exit 1; }
+ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}
+[ -f "$ABU/bin/abu.mjs" ] || { echo "ABU is not installed: run abu:onboard first"; return 1 2>/dev/null || exit 1; }
 SK="$ABU/skills/explore-a-personal-brand/scripts"     # read-site.mjs, render-board.mjs, ...
 abu() { node "$ABU/bin/abu.mjs" "$@"; }               # the engine, from any directory; needs python3
 SETUP
-. <work>/setup.sh
+. <work>/setup.sh || exit 1
 ```
 
 **If ABU is not found, say ABU is not installed and point at `abu:onboard`; do nothing else.**
@@ -64,7 +64,7 @@ The off-list answer lives in the question text, because a preview would cost the
 ## 3. Read the site, when there is one
 
 ```bash
-. <work>/setup.sh
+. <work>/setup.sh || exit 1
 node "$SK/read-site.mjs" <url> --out <work>/site --direction <work>/a.json
 ```
 
@@ -128,7 +128,7 @@ SVG, never a raster.
 ## 6. Render all three boards in parallel
 
 ```bash
-. <work>/setup.sh
+. <work>/setup.sh || exit 1
 node "$SK/render-board.mjs" <work>/a.json --out <work>/a.png > <work>/a.log 2>&1 & pa=$!
 node "$SK/render-board.mjs" <work>/b.json --out <work>/b.png > <work>/b.log 2>&1 & pb=$!
 node "$SK/render-board.mjs" <work>/c.json --out <work>/c.png > <work>/c.log 2>&1 & pc=$!
@@ -171,7 +171,7 @@ approved on a pick alone, and do not describe a candidate as the brand.
 ## 9. On yes: make the universe
 
 ```bash
-. <work>/setup.sh
+. <work>/setup.sh || exit 1
 U=<repos>/<slug>-universe
 abu init "$U" --name <slug>-brand
 abu seed "$U" --from <work>/<chosen>.fixed.json --brief <work>/brand-brief.md \
