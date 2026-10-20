@@ -3,6 +3,26 @@
 The npm package `@supersuit/abu` is the ABU engine at the same version as the `abu` Claude plugin;
 both are released by one `vX.Y.Z` tag. The full record of every version is [SAVE-LOG.md](./SAVE-LOG.md).
 
+## 1.49.0 (2026-10-20)
+
+- New skill `explore-a-personal-brand`: a personal brand exploration that ends in a seeded universe.
+  It asks where the operator is starting from (a site that is them, a site that is not, or nothing,
+  the default), runs a short voice interview, renders three directions as brand boards in code
+  (palette, type, an outlined monogram, a sample page), puts them side by side on the operator's
+  phone, refines until they say yes, then writes the universe. Nothing is golden before that yes.
+- `abu seed <universe> --from <direction.json>`: writes palette, type, `identity.surfaces`
+  (`default`, `artifact`, `artifact-light`), the mark, a favicon, and the brand brief, each with a
+  recipe, so `freedom-brand.mjs emit --surface artifact` feeds a self-hosted artifact hub. Inputs are
+  validated before anything is written; marks are sanitized.
+- Scripts in the skill: `read-site.mjs` (reads a live site's brand in headless Chrome, main-frame
+  status only, exit 3 for a thin brand), `render-board.mjs` (board PNG, contrast fixes persisted to
+  `<name>.fixed.json`, light-mode accent derived), monogram outlines via `uv run` with pinned
+  fonttools.
+- Fix: `make-a-book`, `book-doctor` and `land-work` found ABU through a cache path that never
+  existed (`cache/garysheng/abu`); they now use `${CLAUDE_PLUGIN_ROOT}` or the newest
+  `cache/*/abu/*/`.
+- `canon/craft/*.recipe.json` sidecars are no longer loaded as craft records.
+
 ## 1.48.0 (2026-10-16)
 
 - `abu check-share <site> [--added <range>]`: refuses a page that would not unfurl as itself, one that
