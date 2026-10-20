@@ -138,3 +138,19 @@ T("renderBoard never aborts for an unavailable family: it stands one in and reco
   assert.ok(r.markSvg.includes("M10 10L90 10L50 90Z"));
   assert.equal(png(readFileSync(out)).width, 780);
 });
+
+T("a stand-in on an interview direction is attributed to the interview, not a site", async () => {
+  const d = structuredClone(D); d.type.display = "Foundry Serif";
+  d.sources = [{ choice: "type", from: "interview", detail: "q3: likes old books" }];
+  const r = await renderBoard(d, join(mkdtempSync(join(tmpdir(), "board-")), "b.png"), { fetchFn: fakeFetch(new Set(["Inter"])), outlines: () => "M0 0Z" });
+  const s = r.direction.sources.find((x) => x.detail.includes("not on Google Fonts"));
+  assert.equal(s.from, "interview");
+});
+
+T("a font that could not be checked is kept and named on the board", async () => {
+  const r = await renderBoard(D, join(mkdtempSync(join(tmpdir(), "board-")), "b.png"), { fetchFn: async () => ({ status: 500 }), outlines: () => "M0 0Z" });
+  assert.equal(r.direction.type.display, "Fraunces");
+  assert.equal(r.standIns.length, 0);
+  assert.ok(r.direction.sources.some((x) => x.detail.startsWith("could not check")));
+  assert.match(boardHtml(D, [], "<svg/>", [], ["Fraunces"]), /could not check whether Fraunces is on Google Fonts/);
+});

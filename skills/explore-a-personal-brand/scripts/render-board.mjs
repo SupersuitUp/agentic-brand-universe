@@ -21,7 +21,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const gurl = (d, b) => "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(safeFamily(d)).replace(/%20/g, "+") +
   ":wght@400;600&family=" + encodeURIComponent(safeFamily(b)).replace(/%20/g, "+") + ":wght@400;500;600&display=swap";
 
-export function boardHtml(direction, notes = [], markSvg, standIns = []) {
+export function boardHtml(direction, notes = [], markSvg, standIns = [], unchecked = []) {
   const { palette: p, type: t } = direction;
   const sized = (px) => `<span class="m" style="width:${px}px;height:${px}px">${markSvg}</span>`;
   const r = (a, b) => ratio(a, b).toFixed(1);
@@ -60,7 +60,7 @@ h1{font-size:34px;line-height:1.1;margin:0 0 8px}
 <div class="lbl">Contrast</div>
 <div class="c">text on ground ${r(p.ink, p.ground)}:1<br>accent on ground ${r(p.accent, p.ground)}:1</div>
 ${notes.map((n) => `<div class="note">Adjusted: ${esc(n)}</div>`).join("")}
-<div id="foot" class="note">${standIns.map((x) => `${esc(x.to)} stood in for ${esc(x.from)} (${esc(x.reason)})`).join("<br>")}</div>
+<div id="foot" class="note">${[...standIns.map((x) => `${esc(x.to)} stood in for ${esc(x.from)} (${esc(x.reason)})`), ...unchecked.map((f) => `could not check whether ${esc(f)} is on Google Fonts`)].join("<br>")}</div>
 </body></html>`;
 }
 
@@ -74,17 +74,22 @@ export async function renderBoard(direction, outPng, opts = {}) {
   const errs = validateDirection(direction);
   if (errs.length) throw new Error("invalid direction: " + errs.join("; "));
   const { direction: fixed, notes } = fixContrast(direction);
-  const standIns = [];
+  const standIns = [], unchecked = [];
+  // A stand-in is attributed to the direction's own origin (interview, site, refine), never assumed to be a site.
+  const originOf = (kind) => (fixed.sources || []).find((x) => x.choice === `type.${kind}` || x.choice === "type")?.from || (fixed.sources || [])[0]?.from || "direction";
   for (const k of ["display", "body"]) {
     const f = await resolveFont(safeFamily(fixed.type[k]), { fetchFn: opts.fetchFn });
     if (f.replaced) {
       standIns.push(f.replaced);
       fixed.type[k] = f.family;
-      fixed.sources = [...(fixed.sources || []), { choice: `type.${k}`, from: "site", detail: f.replaced.reason }];
+      fixed.sources = [...(fixed.sources || []), { choice: `type.${k}`, from: originOf(k), detail: f.replaced.reason }];
+    } else if (f.couldNotCheck) {
+      unchecked.push(fixed.type[k]);
+      fixed.sources = [...(fixed.sources || []), { choice: `type.${k}`, from: originOf(k), detail: `could not check whether ${fixed.type[k]} is on Google Fonts` }];
     }
   }
   const markSvg = fixed.mark.kind === "svg" ? fixed.mark.svg : await monogramSvg(fixed.mark, fixed.palette, fixed.type.display, { fetchFn: opts.fetchFn, outlines: opts.outlines });
-  const html = boardHtml(fixed, notes, markSvg, standIns);
+  const html = boardHtml(fixed, notes, markSvg, standIns, unchecked);
   const c = await launch({ width: 390, height: 900 });
   try {
     await c.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 900, deviceScaleFactor: 2, mobile: false });

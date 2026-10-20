@@ -21,22 +21,28 @@ export function findChrome() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Launch with up to 3 attempts: a headless Chrome occasionally dies at startup under load. */
+/**
+ * Launch with up to 3 attempts: a headless Chrome occasionally dies at startup under load.
+ * A missing binary is not retried. Every failed attempt kills its Chrome and removes its profile.
+ */
 export async function launch(opts = {}) {
+  const bin = findChrome();
   let err;
   for (let i = 0; i < 3; i++) {
-    try { return await launchOnce(opts); } catch (e) { err = e; await sleep(300); }
+    try { return await launchOnce(bin, opts); } catch (e) { err = e; await sleep(300); }
   }
   throw err;
 }
 
-async function launchOnce({ width = 1280, height = 900 } = {}) {
+async function launchOnce(bin, { width = 1280, height = 900 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "abu-cdp-"));
-  const proc = spawn(findChrome(), [
+  const proc = spawn(bin, [
     "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${dir}`,
     "--no-first-run", "--no-default-browser-check", "--disable-gpu",
     "--hide-scrollbars", `--window-size=${width},${height}`, "about:blank",
   ], { stdio: ["ignore", "ignore", "pipe"] });
+  const cleanup = () => { try { proc.kill(); } catch {} try { rmSync(dir, { recursive: true, force: true }); } catch {} };
+  try {
   let stderr = "";
   proc.stderr.on("data", (b) => { stderr += b; });
 
@@ -47,7 +53,7 @@ async function launchOnce({ width = 1280, height = 900 } = {}) {
     if (!port && proc.exitCode !== null) throw new Error("Chrome exited early: " + stderr.slice(-300));
     if (!port) await sleep(100);
   }
-  if (!port) { proc.kill(); throw new Error("Chrome gave no DevTools port: " + stderr.slice(-300)); }
+  if (!port) throw new Error("Chrome gave no DevTools port: " + stderr.slice(-300));
 
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
   const page = targets.find((t) => t.type === "page");
@@ -77,6 +83,7 @@ async function launchOnce({ width = 1280, height = 900 } = {}) {
     if (!listeners.has(method)) listeners.set(method, new Set());
     listeners.get(method).add(fn);
   });
+  const on = (method, fn) => { if (!listeners.has(method)) listeners.set(method, new Set()); listeners.get(method).add(fn); };
   const close = async () => {
     try { ws.close(); } catch {}
     proc.kill();
@@ -85,5 +92,6 @@ async function launchOnce({ width = 1280, height = 900 } = {}) {
   };
   await send("Page.enable");
   await send("Runtime.enable");
-  return { send, once, close, port };
+  return { send, once, on, close, port };
+  } catch (e) { cleanup(); throw e; }
 }
