@@ -4,7 +4,7 @@ import { checkFont } from "../scripts/fonts.mjs";
 import { findChrome } from "../scripts/cdp.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFileSync, mkdtempSync, existsSync } from "node:fs";
+import { readFileSync, mkdtempSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,7 +95,7 @@ T("toDirection gives a valid direction", async () => {
   const d = await toDirection(s, { fetchFn: fakeFetch(new Set(["Georgia", "Inter"])) });
   assert.deepEqual(validateDirection(d), []);
   assert.equal(d.palette.ground, "#0b0d10");
-  assert.equal(d.mark.letters, "NW");
+  assert.equal(d.mark.kind, "svg", "the fixture site has its own square svg logo, so that is the mark");
 });
 
 T("validateDirection names a bad hex", () => {
@@ -219,4 +219,30 @@ test("monogram letters are letters: punctuation and emoji are skipped", async ()
   assert.equal((await toDirection(sr("😀 Zed"), { fetchFn: f })).mark.letters, "Z");
   assert.equal((await toDirection(sr("😀 😀"), { fetchFn: f })).mark.letters, "A", "falls back to the host's first letter");
   assert.equal((await toDirection(sr("Élan Vital"), { fetchFn: f })).mark.letters, "ÉV");
+});
+
+// The site's own vector logo is the site's mark. Drawing a monogram in its place threw away the
+// one thing on the site that was unambiguously theirs (found rehearsing on a real site, 2026-10-20).
+test("toDirection uses the site's own svg logo as the mark, on a tile it can be seen against", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "logo-"));
+  const logo = join(dir, "logo.svg");
+  writeFileSync(logo, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 32"><defs><style>.a{fill:#111;}</style></defs><path class="a" d="M0 0h37v32H0z"/></svg>');
+  const d = await toDirection({ ...SR({ display: "Inter", body: "Inter" }), logo }, { fetchFn: fakeFetch(new Set(["Inter"])) });
+  assert.deepEqual(validateDirection(d), []);
+  assert.equal(d.mark.kind, "svg");
+  assert.match(d.mark.svg, /viewBox="0 0 100 100"/);
+  assert.match(d.mark.svg, /fill="#eeeeee"/, "a near-black logo sits on the light ink tile, not the dark ground");
+  assert.match(d.mark.svg, /M0 0h37v32H0z/);
+  assert.ok(d.sources.some((x) => x.choice === "mark" && x.from === "site"));
+  const py = spawnSync("python3", ["-c", "import sys,xml.dom.minidom as m;m.parseString(sys.stdin.read())"], { input: d.mark.svg });
+  assert.equal(py.status, 0, py.stderr.toString());
+});
+
+test("toDirection keeps a monogram when the logo is a wide wordmark, and says why", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "logo-"));
+  const logo = join(dir, "logo.svg");
+  writeFileSync(logo, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 40"><path d="M0 0h300v40H0z"/></svg>');
+  const d = await toDirection({ ...SR({ display: "Inter", body: "Inter" }), logo }, { fetchFn: fakeFetch(new Set(["Inter"])) });
+  assert.equal(d.mark.kind, "monogram");
+  assert.ok(d.sources.some((x) => x.choice === "mark" && /wordmark/.test(x.detail)));
 });

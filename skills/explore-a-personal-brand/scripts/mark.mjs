@@ -42,3 +42,31 @@ export async function monogramSvg({ letters, treatment = "plain" }, palette, dis
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="${esc(L)}">` +
     `<rect width="100" height="100" rx="${rx}" fill="${palette.accent}"/><path d="${d}" fill="${fg}"/></svg>\n`;
 }
+
+const hex6 = (h) => { const s = h.toLowerCase(); return s.length === 4 ? "#" + [...s.slice(1)].map((c) => c + c).join("") : s; };
+
+/**
+ * A site's own svg logo as a square mark: the logo, scaled to fit, on a tile of whichever palette
+ * colour it reads best against. The logo's fills are read from attributes and inline CSS; none
+ * found means SVG's default, black. Returns null for a wide wordmark (aspect over 2:1), which
+ * would shrink to nothing at favicon size; the caller keeps a monogram then.
+ */
+export function siteMarkSvg(logoSvg, palette) {
+  const m = logoSvg.match(/<svg\b[^>]*>/i);
+  if (!m) return null;
+  const vb = m[0].match(/viewBox\s*=\s*"([^"]+)"/i);
+  const wh = (n) => parseFloat((m[0].match(new RegExp(`\\b${n}\\s*=\\s*"([\\d.]+)`)) || [])[1]);
+  const [, , w, h] = vb ? vb[1].trim().split(/[\s,]+/).map(Number) : [0, 0, wh("width"), wh("height")];
+  if (!(w > 0 && h > 0)) return null;
+  if (Math.max(w, h) / Math.min(w, h) > 2) return null;
+  const fills = [...logoSvg.matchAll(/fill\s*[:=]\s*"?\s*(#[0-9a-f]{6}|#[0-9a-f]{3})\b/gi)].map((x) => hex6(x[1]));
+  const ink = fills.length ? [...new Set(fills)] : ["#000000"];
+  const tiles = [palette.ground, palette.accent, palette.ink];
+  const score = (t) => Math.min(...ink.map((f) => ratio(f, t)));
+  const tile = tiles.reduce((a, b) => (score(b) > score(a) ? b : a));
+  const inner = logoSvg.slice(m.index + m[0].length).replace(/<\/svg>\s*$/i, "");
+  const view = vb ? vb[1] : `0 0 ${w} ${h}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img">` +
+    `<rect width="100" height="100" rx="14" fill="${tile}"/>` +
+    `<svg x="14" y="14" width="72" height="72" viewBox="${view}">${inner}</svg></svg>\n`;
+}

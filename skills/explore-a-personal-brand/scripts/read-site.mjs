@@ -5,12 +5,13 @@
 // HTTP error, a login redirect or an unreachable host (no usable read); exit 3 when the read worked
 // but the site is too thin to make a direction from (site-read.json is still written).
 // Writes <dir>/site-read.json and returns the same object. Node 22+.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launch } from "./cdp.mjs";
 import { validateDirection } from "./direction.mjs";
 import { resolveFont } from "./fonts.mjs";
+import { siteMarkSvg } from "./mark.mjs";
 
 // Runs inside the page. Returns plain data.
 const PAGE_SCRIPT = `(() => {
@@ -222,6 +223,19 @@ export async function toDirection(sr, opts = {}) {
     mark: { kind: "monogram", letters, treatment: "plain" },
     sources,
   };
+  // The site's own vector logo is the mark when it has one: it is the one thing on the site that
+  // is unambiguously theirs. A wide wordmark stays a monogram, since it vanishes at favicon size.
+  if (sr.logo && /\.svg$/i.test(sr.logo)) {
+    let svg = null;
+    try { svg = readFileSync(sr.logo, "utf8"); } catch {}
+    const tiled = svg && siteMarkSvg(svg, d.palette);
+    if (tiled) {
+      d.mark = { kind: "svg", svg: tiled };
+      sources.push({ choice: "mark", from: "site", detail: "the site's own logo, on a tile it reads against" });
+    } else if (svg) {
+      sources.push({ choice: "mark", from: "site", detail: "the site's logo is a wide wordmark, so the mark is a monogram of its letters" });
+    }
+  }
   const errs = validateDirection(d);
   if (errs.length) throw new Error("toDirection produced an invalid direction: " + errs.join("; "));
   return d;
