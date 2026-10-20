@@ -10,11 +10,19 @@ import { validateDirection } from "./direction.mjs";
 
 // Runs inside the page. Returns plain data.
 const PAGE_SCRIPT = `(() => {
+  // Resolve ANY CSS color (rgb, oklch, oklab, lab, lch, color(), named) to hex by letting the
+  // browser paint it onto a 1x1 canvas. Returns null when transparent (alpha < 0.5) or invalid.
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
   const toHex = (c) => {
-    const m = String(c).match(/rgba?\\(([^)]+)\\)/); if (!m) return null;
-    const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number);
-    if (p.length >= 4 && p[3] === 0) return null;
-    return '#' + p.slice(0,3).map(n => Math.round(n).toString(16).padStart(2,'0')).join('');
+    if (!c || c === 'transparent') return null;
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+    ctx.fillStyle = String(c);
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    if (a < 128) return null;
+    return '#' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('');
   };
   const area = new Map();
   const vw = innerWidth;
@@ -29,8 +37,8 @@ const PAGE_SCRIPT = `(() => {
   }
   const rootBg = toHex(getComputedStyle(document.documentElement).backgroundColor);
   const bodyBg = toHex(getComputedStyle(document.body).backgroundColor);
-  const ground = bodyBg || rootBg || '#ffffff';
-  const text = toHex(getComputedStyle(document.body).color) || '#000000';
+  const ground = bodyBg || rootBg || null;
+  const text = toHex(getComputedStyle(document.body).color) || null;
   const accents = [];
   for (const el of document.querySelectorAll('button, .btn, [class*=button], [role=button], a')) {
     const cs = getComputedStyle(el); const r = el.getBoundingClientRect();
@@ -49,6 +57,29 @@ const PAGE_SCRIPT = `(() => {
   const icon = link('link[rel~="icon"]') || abs('/favicon.ico');
   const touch = link('link[rel="apple-touch-icon"]');
   const share = meta('og:image') ? abs(meta('og:image')) : null;
+  // An inline <svg> only renders inside its page. Make it standalone: xmlns, viewBox, and the
+  // page's colors (currentColor and CSS-set fill/stroke) written onto the elements.
+  const standaloneSvg = (svg) => {
+    const clone = svg.cloneNode(true);
+    const r = svg.getBoundingClientRect();
+    if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', '0 0 ' + Math.round(r.width) + ' ' + Math.round(r.height));
+    if (!clone.getAttribute('width')) clone.setAttribute('width', String(Math.round(r.width)));
+    if (!clone.getAttribute('height')) clone.setAttribute('height', String(Math.round(r.height)));
+    const orig = [svg, ...svg.querySelectorAll('*')], copy = [clone, ...clone.querySelectorAll('*')];
+    orig.forEach((o, i) => {
+      const cs = getComputedStyle(o), c = copy[i];
+      for (const prop of ['fill', 'stroke']) {
+        const v = c.getAttribute(prop);
+        if (v === 'none') continue;
+        const hx = toHex(cs[prop]);
+        if (hx && (v === null || v === 'currentColor')) c.setAttribute(prop, hx);
+      }
+      c.removeAttribute('class'); c.removeAttribute('style');
+    });
+    let out = new XMLSerializer().serializeToString(clone);
+    const cc = toHex(getComputedStyle(svg).color) || '#000000';
+    return out.replace(/currentColor/g, cc);
+  };
   // logo: an img or inline svg that says "logo", else the first img/svg in the header
   let logo = null;
   const cand = [...document.querySelectorAll('img, svg')];
@@ -57,13 +88,15 @@ const PAGE_SCRIPT = `(() => {
   if (pick) {
     const r = pick.getBoundingClientRect();
     if (r.width > 1 && r.height > 1) {
-      logo = pick.tagName.toLowerCase() === 'svg' ? { inline: pick.outerHTML } : { url: abs(pick.getAttribute('src')) };
+      logo = pick.tagName.toLowerCase() === 'svg' ? { inline: standaloneSvg(pick) } : { url: abs(pick.getAttribute('src')) };
     }
   }
   const name = meta('og:site_name') || (document.title || '').split(/[|\\-–—:·]/)[0].trim() || (h && h.textContent.trim()) || location.hostname;
   return { name, description: meta('og:description') || meta('description') || '', ground, text,
     area: [...area].sort((a,b) => b[1]-a[1]).slice(0, 8), accents, fonts, icon, touch, share, logo };
 })()`;
+
+const EXT_OK = new Set([".svg", ".png", ".ico", ".jpg", ".jpeg", ".webp"]);
 
 async function download(url, outDir, stem) {
   if (!url) return null;
@@ -72,7 +105,7 @@ async function download(url, outDir, stem) {
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") || "";
     let ext = extname(new URL(url).pathname).toLowerCase();
-    if (!ext) ext = ct.includes("svg") ? ".svg" : ct.includes("png") ? ".png" : ct.includes("jpeg") ? ".jpg" : ".bin";
+    if (!EXT_OK.has(ext)) ext = ct.includes("svg") ? ".svg" : ct.includes("png") ? ".png" : ct.includes("jpeg") ? ".jpg" : ct.includes("webp") ? ".webp" : ct.includes("icon") ? ".ico" : ".png";
     const file = join(outDir, stem + ext);
     writeFileSync(file, Buffer.from(await res.arrayBuffer()));
     return file;
@@ -96,15 +129,21 @@ export async function readSite(url, { outDir } = {}) {
     await c.send("Page.navigate", { url });
     await loaded;
     await c.send("Runtime.evaluate", { expression: "document.fonts && document.fonts.ready.then(() => 1)", awaitPromise: true });
-    const { result } = await c.send("Runtime.evaluate", { expression: PAGE_SCRIPT, returnByValue: true });
-    const p = result.value;
+    const ev = await c.send("Runtime.evaluate", { expression: PAGE_SCRIPT, returnByValue: true });
+    if (ev.exceptionDetails) {
+      throw new Error("reading " + url + " failed in the page: " + (ev.exceptionDetails.exception?.description || ev.exceptionDetails.text));
+    }
+    const p = ev.result.value;
 
     const total = p.area.reduce((s, [, a]) => s + a, 0) || 1;
     const colors = [];
     const seen = new Set();
     const add = (hex, role, area, from) => { if (hex && !seen.has(hex + role)) { seen.add(hex + role); colors.push({ hex, role, area, from }); } };
-    add(p.ground, "ground", (p.area.find(([h]) => h === p.ground)?.[1] || total) / total, "body background");
-    add(p.text, "text", 0, "body color");
+    const unresolved = {};
+    if (p.ground) add(p.ground, "ground", (p.area.find(([h]) => h === p.ground)?.[1] || total) / total, "body background");
+    else unresolved.ground = "body and html have no opaque background (the browser paints its default), so the site declares no ground";
+    if (p.text) add(p.text, "text", 0, "body color");
+    else unresolved.text = "body color could not be resolved to an opaque color";
     const acc = p.accents.find((a) => a.hex !== p.ground && a.hex !== p.text);
     if (acc) add(acc.hex, "accent", 0, acc.from);
     for (const [hex, a] of p.area) if (hex !== p.ground && hex !== p.text && hex !== acc?.hex) add(hex, "other", a / total, "background area");
@@ -119,7 +158,7 @@ export async function readSite(url, { outDir } = {}) {
       phone: await shot(c, 390, 844, join(outDir, "phone.png")),
       desktop: await shot(c, 1280, 900, join(outDir, "desktop.png")),
     };
-    const out = { url, name: p.name, description: p.description, colors, fonts: p.fonts, logo, favicon, faviconFile, touchIcon, shareImage, shots };
+    const out = { url, name: p.name, description: p.description, colors, fonts: p.fonts, logo, favicon, faviconFile, touchIcon, shareImage, shots, unresolved };
     writeFileSync(join(outDir, "site-read.json"), JSON.stringify(out, null, 2) + "\n");
     return out;
   } finally {
@@ -132,8 +171,10 @@ const GENERIC = new Set(["serif", "sans-serif", "monospace", "system-ui", "ui-sa
 /** The "site is me" case: a valid direction taken straight from a site read. */
 export function toDirection(sr) {
   const role = (r) => sr.colors.find((c) => c.role === r)?.hex;
-  const ground = role("ground") || "#ffffff";
-  const ink = role("text") || "#111111";
+  const ground = role("ground"), ink = role("text");
+  if (!ground || !ink) {
+    throw new Error("cannot make a direction from this site: " + Object.entries(sr.unresolved || {}).map(([k, v]) => `${k}: ${v}`).join("; "));
+  }
   const accent = role("accent") || sr.colors.find((c) => c.role === "other")?.hex || ink;
   const font = (f, fallback) => (f && !GENERIC.has(f.toLowerCase()) ? f : fallback);
   const body = font(sr.fonts?.body, "Inter");
