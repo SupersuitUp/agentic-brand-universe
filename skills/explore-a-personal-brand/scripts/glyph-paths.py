@@ -4,17 +4,11 @@
 Usage: glyph-paths.py <family> <letters> [--weight 600] [--tracking -0.03]
 Prints JSON: {"d": "<path data>", "family": ..., "letters": ...}.
 Fetches the family's subset (css2 `text=` parameter) from Google Fonts with an old UA so the
-reply is a single static font file, then reads the outlines with fontTools. If fontTools
-is missing it is installed with `pip install --user fonttools brotli` (said on stderr).
+reply is a single static font file, then reads the outlines with fontTools. Needs fontTools
+and brotli: mark.mjs runs this under `uv run --with fonttools==<pin> --with brotli==<pin>`, so nothing is
+installed into any Python.
 """
-import argparse, json, re, subprocess, sys, tempfile, urllib.parse, urllib.request
-
-try:
-    import fontTools  # noqa: F401
-    import brotli  # noqa: F401
-except ImportError:
-    print("glyph-paths: installing fonttools and brotli with pip --user", file=sys.stderr)
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "-q", "fonttools", "brotli"])
+import argparse, json, re, sys, tempfile, urllib.error, urllib.parse, urllib.request
 
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
@@ -30,12 +24,25 @@ def fetch(url):
         return r.read()
 
 
-def load_font(family, weight, text):
-    q = urllib.parse.urlencode({"family": f"{family}:wght@{weight}", "text": text})
+def css_for(family, weight, text):
+    """The css2 reply for the family. A single-weight family (Bebas Neue, Abril Fatface) answers 400
+    to a weight axis, so retry without it and take the weight it has."""
+    def url(axis):
+        fam = f"{family}:wght@{weight}" if axis else family
+        return "https://fonts.googleapis.com/css2?" + urllib.parse.urlencode({"family": fam, "text": text})
     try:
-        css = fetch("https://fonts.googleapis.com/css2?" + q).decode()
+        return fetch(url(True)).decode()
+    except urllib.error.HTTPError as e:
+        if e.code != 400:
+            sys.exit(f"glyph-paths: could not get {family!r} from Google Fonts ({e}); it may not be a Google font")
+    try:
+        return fetch(url(False)).decode()
     except Exception as e:
         sys.exit(f"glyph-paths: could not get {family!r} from Google Fonts ({e}); it may not be a Google font")
+
+
+def load_font(family, weight, text):
+    css = css_for(family, weight, text)
     m = re.search(r"url\(([^)]+)\)", css)
     if not m:
         sys.exit(f"glyph-paths: no font file in the Google Fonts reply for {family!r}")
@@ -45,7 +52,9 @@ def load_font(family, weight, text):
         font = TTFont(src)
         if "fvar" in font:
             from fontTools.varLib import instancer
-            font = instancer.instantiateVariableFont(font, {"wght": weight})
+            ax = next((a for a in font["fvar"].axes if a.axisTag == "wght"), None)
+            if ax is not None:  # the nearest weight the font has
+                font = instancer.instantiateVariableFont(font, {"wght": max(ax.minValue, min(ax.maxValue, weight))})
         font.save(dst)
         return TTFont(dst, lazy=False)
 
@@ -81,4 +90,5 @@ def main():
     print(json.dumps({"d": pen.getCommands(), "family": a.family, "letters": letters}))
 
 
-main()
+if __name__ == "__main__":
+    main()

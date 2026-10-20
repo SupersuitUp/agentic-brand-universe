@@ -195,3 +195,23 @@ test("the board shows the light accent", () => {
   assert.match(html, /Light accent/);
   assert.ok(html.includes(direction.palette.lightAccent));
 });
+
+test("the mark runs its helper under uv with pinned packages, never pip", async () => {
+  let seen;
+  const run = (cmd, args) => { seen = { cmd, args }; return { status: 0, stdout: JSON.stringify({ d: "M0 0Z" }), stderr: "" }; };
+  await monogramSvg(D.mark, D.palette, "Fraunces", { fetchFn: fakeFetch(new Set(["Fraunces"])), run });
+  assert.equal(seen.cmd, "uv");
+  assert.deepEqual(seen.args.slice(0, 5), ["run", "--quiet", "--with", "fonttools==4.61.1", "--with"]);
+  assert.ok(seen.args.includes("brotli==1.2.0"));
+  assert.ok(seen.args.some((a) => a.endsWith("glyph-paths.py")));
+});
+
+test("a missing uv fails clearly", async () => {
+  const run = () => ({ error: Object.assign(new Error("spawn uv ENOENT"), { code: "ENOENT" }), status: null, stdout: "", stderr: "" });
+  await assert.rejects(() => monogramSvg(D.mark, D.palette, "Fraunces", { fetchFn: fakeFetch(new Set(["Fraunces"])), run }), /install uv: brew install uv/);
+});
+
+test("a single-weight Google family (Bebas Neue) outlines for real", { skip: NET || (spawnSync("uv", ["--version"]).error ? "uv not installed" : false) }, async () => {
+  const svg = await monogramSvg({ letters: "BN", treatment: "plain" }, D.palette, "Bebas Neue");
+  assert.match(svg, /<path d="M/);
+});

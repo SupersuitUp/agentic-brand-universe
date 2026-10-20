@@ -34,7 +34,8 @@ SETUP
 - **`<slug>`** is the operator's name as a slug (`ada-lovelace`). **`<repos>`** is the folder that holds their
   other repos and universes (the parent of their workspace; look where an existing universe lives and use
   that). **`<owner>`** is their GitHub account: `gh api user -q .login`, unless the workspace names an organization.
-- The scripts need Node 22+ and Chrome; the mark and the board need network for Google Fonts.
+- The scripts need Node 22+ and Chrome; the mark and the board need network for Google Fonts and `uv`
+  (`brew install uv`), which runs the outline helper with pinned packages.
   **Offline: say so and stop**, since the mark outlines and board fonts cannot be fetched.
 
 ## 1. Read what the workspace already knows

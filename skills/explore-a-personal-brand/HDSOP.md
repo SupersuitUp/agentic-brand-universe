@@ -29,7 +29,7 @@ wants to redo the one they have. Not a company rebrand, and not one image.
 - The operator's profile in their workspace, read first.
 - A site URL, if they have one (read with `read-site.mjs`).
 - A phone for the voice interview and the side-by-side compare.
-- Node 22+, Chrome, python3 with fonttools (installed on demand), network for Google Fonts.
+- Node 22+, Chrome, uv (`brew install uv`; it runs the outline helper with pinned fonttools and brotli), network for Google Fonts.
 - A GitHub owner for the private repo.
 
 # Roles
