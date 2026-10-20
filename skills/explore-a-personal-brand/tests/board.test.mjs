@@ -4,9 +4,17 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { ratio, fixContrast } from "../scripts/contrast.mjs";
-import { monogramSvg } from "../scripts/mark.mjs";
+import { findChrome } from "../scripts/cdp.mjs";
 import { renderBoard } from "../scripts/render-board.mjs";
+import { monogramSvg } from "../scripts/mark.mjs";
+
+let HAVE = true;
+try { findChrome(); } catch { HAVE = false; }
+const T = (n, f, needs = true) => test(n, { skip: needs && !HAVE && "Chrome not installed" }, f);
+const NET = process.env.ABU_OFFLINE ? "no network" : false;
 
 const D = {
   name: "Sample Studio", concept: "A made-up studio for testing.",
@@ -30,9 +38,9 @@ function png(buf) {
   return { width: w, height: buf.readUInt32BE(20), px: [...raw.subarray(1, 1 + bpp)] };
 }
 
-test("ratio black/white is 21", () => { assert.equal(Math.round(ratio("#000", "#fff")), 21); });
+T("ratio black/white is 21", () => { assert.equal(Math.round(ratio("#000", "#fff")), 21); });
 
-test("fixContrast lifts weak ink and notes it", () => {
+T("fixContrast lifts weak ink and notes it", () => {
   const d = structuredClone(D); d.palette.ink = "#3a3f45";
   const { direction, notes } = fixContrast(d);
   assert.ok(ratio(direction.palette.ink, d.palette.ground) >= 4.5);
@@ -41,21 +49,55 @@ test("fixContrast lifts weak ink and notes it", () => {
   assert.equal(D.palette.ink, "#e9e4da");
 });
 
-test("fixContrast leaves a sound palette alone", () => {
+T("fixContrast leaves a sound palette alone", () => {
   assert.deepEqual(fixContrast(D).notes, []);
 });
 
-test("monogramSvg is svg with letters and accent", () => {
-  const s = monogramSvg(D.mark, D.palette, "Fraunces");
-  assert.match(s, /^<svg[\s\S]*<\/svg>\s*$/);
-  assert.ok(s.includes("SS") && s.includes("#c8743a"));
+test("accent is lifted to 4.5:1 against ground", () => {
+  const d = structuredClone(D); d.palette.accent = "#5a3a2a";
+  const { direction, notes } = fixContrast(d);
+  assert.ok(ratio(direction.palette.accent, d.palette.ground) >= 4.5);
+  assert.ok(notes.some((n) => n.startsWith("accent")));
 });
 
-test("renderBoard writes a 2x PNG whose top-left pixel is the ground", async () => {
+test("a lift that cannot reach its target says so", () => {
+  const d = structuredClone(D); d.palette.ground = "#808080"; d.palette.ink = "#7a7a7a";
+  const { direction, notes } = fixContrast(d);
+  assert.ok(ratio(direction.palette.ink, "#808080") < 4.5, "white on mid grey cannot reach 4.5");
+  assert.match(notes.find((n) => n.startsWith("ink")), /not reached/);
+});
+
+test("monogramSvg is outlines: paths, no <text>, the accent", { skip: NET }, async () => {
+  const s = await monogramSvg(D.mark, D.palette, "Fraunces");
+  assert.match(s, /^<svg[\s\S]*<\/svg>\s*$/);
+  assert.ok(!s.includes("<text"));
+  assert.match(s, /<path d="M[\d. ]+/);
+  assert.ok(s.includes("#c8743a"));
+  const py = spawnSync("python3", ["-c", "import sys,xml.dom.minidom as m;m.parseString(sys.stdin.read())"], { input: s });
+  assert.equal(py.status, 0);
+});
+
+T("renderBoard writes a 2x PNG, top-left is the ground", async () => {
   const out = join(mkdtempSync(join(tmpdir(), "board-")), "b.png");
-  await renderBoard(D, out);
+  const r = await renderBoard(D, out);
   const i = png(readFileSync(out));
   assert.equal(i.width, 780);
-  assert.ok(i.height > 900);
+  assert.equal(i.height, r.cssHeight * 2);
+  assert.ok(i.height > 1800 && i.height < 2600, `height ${i.height}`);
   assert.deepEqual(i.px.slice(0, 3), [0x10, 0x14, 0x18]);
+  assert.equal(r.fontsFellBack, false);
+});
+
+T("the CLI persists the fixed direction and the mark", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "boardcli-"));
+  const d = structuredClone(D); d.palette.ink = "#3a3f45";
+  writeFileSync(join(dir, "dir.json"), JSON.stringify(d));
+  const run = spawnSync("node", [join(import.meta.dirname, "../scripts/render-board.mjs"), join(dir, "dir.json"), "--out", join(dir, "b.png")], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  const fixed = JSON.parse(readFileSync(join(dir, "dir.fixed.json"), "utf8"));
+  assert.ok(ratio(fixed.palette.ink, fixed.palette.ground) >= 4.5);
+  assert.ok(fixed.contrastNotes.length >= 1);
+  assert.equal(JSON.parse(readFileSync(join(dir, "dir.json"), "utf8")).palette.ink, "#3a3f45", "input untouched");
+  const mark = readFileSync(join(dir, "dir.mark.svg"), "utf8");
+  assert.ok(!mark.includes("<text") && mark.includes("<path"));
 });

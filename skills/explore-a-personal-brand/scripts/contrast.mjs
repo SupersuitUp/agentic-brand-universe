@@ -11,19 +11,30 @@ export function ratio(a, b) {
   return (x + 0.05) / (y + 0.05);
 }
 
-/** Move `fg` toward white or black (whichever helps against `bg`) until it reaches `min`. */
+/**
+ * Move `fg` toward white or black (whichever helps against `bg`) until it reaches `min`.
+ * Returns the best it could do; the caller must compare the ratio, because a mid-tone ground
+ * can make `min` unreachable in the chosen direction.
+ */
 export function lift(fg, bg, min) {
   if (ratio(fg, bg) >= min) return fg;
   const target = luminance(bg) < 0.4 ? [255, 255, 255] : [0, 0, 0];
   const base = rgb(fg);
+  let best = fg;
   for (let t = 0.02; t <= 1.0001; t += 0.02) {
     const c = hex(base.map((v, i) => v + (target[i] - v) * t));
+    best = c;
     if (ratio(c, bg) >= min) return c;
   }
-  return hex(target);
+  return best;
 }
 
-/** Lift ink to 4.5:1 and accent to 3:1 against ground (and the light pair likewise). Pure. */
+/**
+ * Lift ink to 4.5:1 and accent to 4.5:1 (the accent is used as link text) against ground, and
+ * the light ink against the light ground. Pure. Every note states what actually happened,
+ * including when the target was not reached. The accent is shared by the dark and light
+ * grounds, so a weak accent on the light ground is reported, not adjusted.
+ */
 export function fixContrast(direction) {
   const d = JSON.parse(JSON.stringify(direction));
   const notes = [];
@@ -33,11 +44,17 @@ export function fixContrast(direction) {
     const before = ratio(p[key], p[bgKey]);
     if (before >= min) return;
     const next = lift(p[key], p[bgKey], min);
-    notes.push(`${label} ${p[key]} on ${p[bgKey]} was ${before.toFixed(1)}:1, lifted to ${next} (${ratio(next, p[bgKey]).toFixed(1)}:1)`);
+    const after = ratio(next, p[bgKey]);
+    notes.push(after >= min
+      ? `${label} ${p[key]} on ${p[bgKey]} was ${before.toFixed(1)}:1, lifted to ${next} (${after.toFixed(1)}:1)`
+      : `${label} ${p[key]} on ${p[bgKey]} was ${before.toFixed(1)}:1 and could only be lifted to ${next} (${after.toFixed(1)}:1; target ${min}:1 not reached)`);
     p[key] = next;
   };
   fix("ink", "ground", 4.5, "ink");
-  fix("accent", "ground", 3, "accent");
+  fix("accent", "ground", 4.5, "accent");
   fix("lightInk", "lightGround", 4.5, "light ink");
+  if (p.lightGround && ratio(p.accent, p.lightGround) < 3) {
+    notes.push(`accent ${p.accent} on light ground ${p.lightGround} is ${ratio(p.accent, p.lightGround).toFixed(1)}:1; not adjusted (one accent serves both grounds)`);
+  }
   return { direction: d, notes };
 }
