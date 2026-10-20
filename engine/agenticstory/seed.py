@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import xml.dom.minidom as minidom
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -41,10 +42,51 @@ def favicon_svg(mark_svg: str, accent: str) -> str:
             f'<rect width="100" height="100" rx="14" fill="{accent}"/>{inner.strip()}</svg>\n')
 
 
+_DROP = {"script", "foreignobject"}
+
+
+def sanitize_svg(svg: str) -> str:
+    """Parse the mark as XML and return it without script, foreignObject, on* handlers or javascript: links.
+    Raises ValueError when it is not a well-formed SVG document."""
+    try:
+        doc = minidom.parseString(svg.encode() if isinstance(svg, str) else svg)
+    except Exception as e:  # noqa: BLE001 - any parse failure is "not an SVG"
+        raise ValueError(f"mark is not well-formed SVG ({e})") from None
+    root = doc.documentElement
+    if root.localName != "svg":
+        raise ValueError(f"mark is not an SVG document (root is <{root.localName}>)")
+
+    def walk(node):
+        for child in list(node.childNodes):
+            if child.nodeType != child.ELEMENT_NODE:
+                continue
+            if (child.localName or child.tagName).lower() in _DROP:
+                node.removeChild(child)
+                continue
+            walk(child)
+        if node.nodeType == node.ELEMENT_NODE:
+            for name in list(node.attributes.keys()):
+                val = node.getAttribute(name)
+                if name.lower().startswith("on") or val.strip().lower().startswith("javascript:"):
+                    node.removeAttribute(name)
+    walk(root)
+    return root.toxml() + "\n"
+
+
 def seed_universe(root, direction: dict, *, brief_md: str, board_png=None, mark_svg: str) -> list[str]:
     errs = validate_direction(direction)
     if errs:
         raise ValueError("invalid direction: " + "; ".join(errs))
+    # Validate every input BEFORE writing anything, so a bad one leaves the universe untouched.
+    if not isinstance(brief_md, str) or not brief_md.strip():
+        raise ValueError("brief is empty")
+    mark_svg = sanitize_svg(mark_svg)
+    if board_png is not None:
+        bp = Path(board_png)
+        if not bp.is_file():
+            raise ValueError(f"board {bp} does not exist")
+        if not bp.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError(f"board {bp} is not a PNG")
     root = Path(root).resolve()
     manifest = root / "universe.json"
     if not manifest.exists():

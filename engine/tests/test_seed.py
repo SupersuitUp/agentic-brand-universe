@@ -70,12 +70,12 @@ class SeedTest(unittest.TestCase):
 
     def test_mark_and_brief(self):
         self.run_seed()
-        self.assertEqual((self.root / "marks/mark.svg").read_text(), SVG)
+        self.assertEqual((self.root / "marks/mark.svg").read_text().strip(), SVG.replace("'", '"'))  # re-serialized by the sanitizer
         self.assertEqual(self.j("universe.json")["identity"]["mark"], "marks/mark.svg")
         self.assertTrue((self.root / "canon/craft/brand-brief.md").exists())
 
     def test_board_becomes_anchor(self):
-        board = Path(self.tmp.name) / "b.png"; board.write_bytes(b"\x89PNG fake")
+        board = Path(self.tmp.name) / "b.png"; board.write_bytes(b"\x89PNG\r\n\x1a\n fake")
         self.run_seed(board=board)
         self.assertEqual(self.j("universe.json")["identity"]["register"]["anchor"],
                          "reference/register/board.png")
@@ -109,7 +109,7 @@ class SeedTest(unittest.TestCase):
     def test_favicon_keeps_a_mark_that_has_its_own_background(self):
         own = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#123456"/><path d="M0 0L9 9Z" fill="#fff"/></svg>'
         seed.seed_universe(self.root, D, brief_md="b", mark_svg=own)
-        self.assertEqual((self.root / "marks/favicon.svg").read_text(), own)
+        self.assertEqual((self.root / "marks/favicon.svg").read_text().strip(), own)
 
     def test_favicon_is_well_formed_when_the_mark_has_its_own_size(self):
         import xml.dom.minidom as m
@@ -154,6 +154,47 @@ class SeedTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         e = json.loads(out.stdout)
         self.assertEqual((e["ground"], e["text"], e["accent"]), ("#f6f2ea", "#1a1a1a", "#a5552a"))
+
+    def test_shared_direction_fixtures(self):
+        fx = json.loads((ENGINE_DIR.parent / "skills/explore-a-personal-brand/tests/fixtures/directions.json").read_text())
+        for v in fx["valid"]:
+            self.assertEqual(validate_direction(v["direction"]), [], v["name"])
+        for bad in fx["invalid"]:
+            errs = validate_direction(bad["direction"])
+            self.assertTrue(any(e.startswith(bad["expect"]) for e in errs), (bad["name"], errs))
+
+    def test_seed_refuses_bad_inputs_before_writing_anything(self):
+        before = sorted(p.name for p in self.root.rglob("*"))
+        board = Path(self.tmp.name) / "b.png"
+        for kw, msg in [
+            (dict(mark_svg="not svg"), "mark"),
+            (dict(mark_svg="<svg><"), "mark"),
+            (dict(mark_svg=SVG, brief_md=""), "brief"),
+            (dict(mark_svg=SVG, board_png=Path(self.tmp.name) / "missing.png"), "board"),
+        ]:
+            args = dict(brief_md="# b", board_png=None); args.update(kw)
+            with self.assertRaises(ValueError) as cm:
+                seed.seed_universe(self.root, D, **args)
+            self.assertIn(msg, str(cm.exception))
+        board.write_bytes(b"GIF89a not a png")
+        with self.assertRaises(ValueError):
+            seed.seed_universe(self.root, D, brief_md="# b", board_png=board, mark_svg=SVG)
+        self.assertEqual(sorted(p.name for p in self.root.rglob("*")), before)
+
+    def test_mark_is_sanitized(self):
+        evil = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onload="x()">'
+                '<script>alert(1)</script><foreignObject><div>hi</div></foreignObject>'
+                '<a href="javascript:alert(1)"><path d="M0 0L9 9Z" onclick="y()"/></a></svg>')
+        seed.seed_universe(self.root, D, brief_md="b", mark_svg=evil)
+        for rel in ("marks/mark.svg", "marks/favicon.svg"):
+            t = (self.root / rel).read_text().lower()
+            for bad in ("<script", "foreignobject", "onload", "onclick", "javascript:"):
+                self.assertNotIn(bad, t, (rel, bad))
+            self.assertIn("<path", t)
+
+    def test_hex_with_a_trailing_newline_is_refused(self):
+        d = json.loads(json.dumps(D)); d["palette"]["ground"] = "#101418\n"
+        self.assertTrue(any("palette.ground" in e for e in validate_direction(d)))
 
     def test_universe_still_validates(self):
         from agenticstory.store import CanonStore

@@ -398,9 +398,12 @@ def main(argv: list[str] | None = None) -> int:
         errs = _dir.validate_direction(d)
         if errs:
             print("seed: invalid direction:"); [print(f"  - {e}") for e in errs]; return 1
-        written = _seed.seed_universe(
-            args.universe, d, brief_md=Path(args.brief).read_text(),
-            board_png=args.board, mark_svg=Path(args.mark).read_text())
+        try:
+            written = _seed.seed_universe(
+                args.universe, d, brief_md=Path(args.brief).read_text(),
+                board_png=args.board, mark_svg=Path(args.mark).read_text())
+        except (OSError, ValueError, FileNotFoundError) as e:
+            print(f"seed: {e}"); return 1
         print(f"seed [{d['name']}]: wrote {len(written)} file(s)")
         for p in written:
             print(f"  + {p}")

@@ -215,3 +215,12 @@ test("a single-weight Google family (Bebas Neue) outlines for real", { skip: NET
   const svg = await monogramSvg({ letters: "BN", treatment: "plain" }, D.palette, "Bebas Neue");
   assert.match(svg, /<path d="M/);
 });
+
+test("the JS validator agrees with the shared fixtures (the Python one runs the same file)", () => {
+  const fx = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures/directions.json"), "utf8"));
+  for (const v of fx.valid) assert.deepEqual(validateDirection(v.direction), [], v.name);
+  for (const bad of fx.invalid) {
+    const errs = validateDirection(bad.direction);
+    assert.ok(errs.some((e) => e.startsWith(bad.expect)), `${bad.name}: ${JSON.stringify(errs)}`);
+  }
+});

@@ -1,0 +1,21 @@
+{
+  "valid": [
+    { "name": "minimal", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": { "display": "Fraunces", "body": "Inter" }, "mark": { "kind": "monogram", "letters": "N" } } },
+    { "name": "full", "direction": { "name": "Night Workshop", "concept": "c", "palette": { "ground": "#101418", "ink": "#e9e4da", "accent": "#c8743a", "lightGround": "#f6f2ea", "lightInk": "#1a1a1a", "lightAccent": "#a5552a" }, "type": { "display": "Fraunces", "body": "Inter" }, "mark": { "kind": "monogram", "letters": "WF", "treatment": "serif-ligature" }, "sources": [] } },
+    { "name": "svg mark", "direction": { "name": "S", "palette": { "ground": "#000000", "ink": "#ffffff", "accent": "#ff8800" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "svg", "svg": "<svg xmlns='http://www.w3.org/2000/svg'/>" } } }
+  ],
+  "invalid": [
+    { "name": "not an object", "direction": [], "expect": "direction" },
+    { "name": "no name", "direction": { "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "name" },
+    { "name": "named color", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "orange" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "palette.accent" },
+    { "name": "hex with a trailing newline", "direction": { "name": "N", "palette": { "ground": "#000000\n", "ink": "#fff", "accent": "#f80" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "palette.ground" },
+    { "name": "four-digit hex", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#ffff", "accent": "#f80" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "palette.ink" },
+    { "name": "bad lightAccent", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80", "lightAccent": "red" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "palette.lightAccent" },
+    { "name": "palette is an array", "direction": { "name": "N", "palette": [], "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "palette" },
+    { "name": "type is an array", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": [], "mark": { "kind": "monogram", "letters": "N" } }, "expect": "type" },
+    { "name": "no body font", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": { "display": "A" }, "mark": { "kind": "monogram", "letters": "N" } }, "expect": "type.body" },
+    { "name": "monogram without letters", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "monogram" } }, "expect": "mark.letters" },
+    { "name": "svg mark without svg", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "svg", "svg": "nope" } }, "expect": "mark.svg" },
+    { "name": "unknown mark kind", "direction": { "name": "N", "palette": { "ground": "#000", "ink": "#fff", "accent": "#f80" }, "type": { "display": "A", "body": "B" }, "mark": { "kind": "raster" } }, "expect": "mark.kind" }
+  ]
+}

@@ -33,7 +33,7 @@ def validate_direction(d) -> list[str]:
         if k not in pal:
             errs.append(f"palette.{k}: required")
     for k in REQUIRED_COLORS + OPTIONAL_COLORS:
-        if k in pal and not (isinstance(pal[k], str) and HEX.match(pal[k])):
+        if k in pal and not (isinstance(pal[k], str) and HEX.fullmatch(pal[k])):
             errs.append(f"palette.{k}: not a hex color: {pal[k]!r}")
     typ = d.get("type")
     if not isinstance(typ, dict):
