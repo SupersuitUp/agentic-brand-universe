@@ -3,6 +3,20 @@
 The npm package `@supersuit/abu` is the ABU engine at the same version as the `abu` Claude plugin;
 both are released by one `vX.Y.Z` tag. The full record of every version is [SAVE-LOG.md](./SAVE-LOG.md).
 
+## 1.49.1 (2026-10-20)
+
+- `explore-a-personal-brand`: when a site has its own vector logo, the "site is the brand" direction
+  now uses it as the mark, on a tile of whichever palette colour it reads against, instead of drawing
+  a lettered monogram in its place. A wordmark wider than 2:1 keeps the monogram (it vanishes at
+  favicon size) and the direction's sources say why. Found rehearsing on a real site.
+
+## 1.49.1 (2026-10-20)
+
+- `explore-a-personal-brand`: when a site has its own vector logo, the "site is the brand" direction
+  now uses it as the mark, on a tile of whichever palette colour it reads against, instead of drawing
+  a lettered monogram in its place. A wordmark wider than 2:1 keeps the monogram (it vanishes at
+  favicon size) and the direction's sources say why. Found rehearsing on a real site.
+
 ## 1.49.0 (2026-10-20)
 
 - New skill `explore-a-personal-brand`: a personal brand exploration that ends in a seeded universe.
