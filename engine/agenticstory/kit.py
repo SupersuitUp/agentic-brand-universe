@@ -261,6 +261,11 @@ def validate_kits(root: Path, craft: dict) -> list[str]:
                             out.append(f"{where}: instead is null, so 'insteadNote' must say why there is no piece")
                     elif it["instead"] not in piece_ids:
                         out.append(f"{where}: instead names '{it['instead']}', which is not a piece in any kit")
+                    # A no-go that names a FILE has a mechanical shape (the file's name), so it gets a
+                    # detector. The CW ribbon mark was retired with only a detectNote calling it "a file
+                    # rather than a source pattern" and shipped again in a new lockup (2026-10-25).
+                    if not it.get("detect") and re.search(r"[\w./-]+\.(svg|png|jpe?g|webp|gif|ico|py|mjs|js|ts|tsx|css)\b", it.get("refuses") or ""):
+                        out.append(f"{where}: refuses names a file, so it needs a 'detect' pattern on that file's name")
                     out += _check_detect(where, it)
     return out
 

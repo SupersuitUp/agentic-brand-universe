@@ -36,6 +36,10 @@ writes site code: surfaces outside the universe are LISTED for whoever owns them
    regex over source files, written with `[^}]*` so one match cannot span two CSS rules. Test it
    against the shape that actually shipped, and against the replacement so it does not fire there.
    A taste rule with no mechanical shape gets no detector; say so in the no-go.
+   **A retired FILE is a mechanical shape**: a no-go whose `refuses` names a file (a mark, an icon,
+   a generator script) detects on that file's name, and `validate` refuses it without one. The CW
+   ribbon mark was retired as "a file rather than a source pattern" with no detector and shipped
+   again in a new lockup.
 6. **Gate.** `abu validate <universe>` (and the universe's own `assert.sh` if it has one) must be
    green. Then `abu check-kit <universe> <every surface repo it governs>`: hits inside the universe
    get fixed now; hits in repos you were not asked to edit are LISTED in your report, file:line,

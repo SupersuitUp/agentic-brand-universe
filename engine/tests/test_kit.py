@@ -102,6 +102,14 @@ class KitTest(unittest.TestCase):
         k = kit(); k["noGos"][1].pop("insteadNote")
         self.assertTrue(any("insteadNote" in p for p in self.problems(k)))
 
+    def test_a_no_go_that_names_a_file_needs_a_detector(self):
+        # 2026-10-25: the CW ribbon mark was a no-go naming its file, with only a detectNote,
+        # and shipped again the same week in a new lockup that nothing flagged.
+        k = kit(); k["noGos"][1]["refuses"] = "the retired mark, public/brand/cw-mark.svg"
+        self.assertTrue(any("names a file" in p for p in self.problems(k)))
+        k["noGos"][1]["detect"] = [{"pattern": "cw-mark\\.svg", "note": "the retired file"}]
+        self.assertFalse(any("names a file" in p for p in self.problems(k)))
+
     def test_a_ruling_with_no_provenance_is_refused(self):
         k = kit(); k["pieces"][0].pop("decided")
         self.assertTrue(any("'decided' is missing" in p for p in self.problems(k)))
