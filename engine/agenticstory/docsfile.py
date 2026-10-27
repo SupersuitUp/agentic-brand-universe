@@ -20,6 +20,9 @@ GENERATED between fences; only judgement is hand-written. The generated blocks:
   providers      (docs/REFERENCE.md) registry/providers.json
   forms          (docs/REFERENCE.md) forms/*/form.json
   spec-changelog (docs/REFERENCE.md) the v0.N changelog headlines in SPEC.md
+  report         (skills/*/SKILL.md) the misfire-report step, in every skill
+  running-abu    (skills/*/SKILL.md) the not-on-PATH fallback, in every skill whose
+                                     own prose runs `abu <verb>`
 
 and one derived file that carries no fences, `.claude-plugin/marketplace.json`, whose
 entry description is projected wholesale from `.claude-plugin/plugin.json`.
@@ -457,8 +460,73 @@ def render_report(skill: str) -> list[str]:
         "believe is wrong is `abu check-kit ... --report`, which attaches the findings and the "
         "rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them "
         "the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it "
-        "for them. If you maintain ABU itself, fix it through `evolve-abu` instead.",
+        "for them. If you maintain ABU itself, fix it through `evolve-abu` instead. "
+        f"If `abu` is not on PATH, run it as `{ABU_NODE.format(verb='report')} ...`, "
+        f"with `ABU={ABU_LOCATE}`.",
     ]
+
+
+# The PATH fallback, ONE source for every skill (2026-10-27). `abu` is the npm package's
+# bin; a Claude plugin install puts nothing on PATH, so `abu kit <universe>` answered
+# "command not found" and the agent dug bin/abu.mjs out of the plugin cache by hand. The
+# one hand-written fallback in the repo (add-or-update-line) `cd`-ed into engine/ first,
+# which resolves a relative universe path INSIDE the plugin and fails; the node entrypoint
+# keeps the caller's directory, so it is the form taught. Verified against the 1.49.2
+# plugin cache: node form and PYTHONPATH form OK on a relative path, cd form FileNotFound.
+ABU_LOCATE = '${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}'
+ABU_NODE = 'node "${{ABU%/}}/bin/abu.mjs" {verb}'
+
+
+def render_running_abu(_root: Path | None = None) -> list[str]:
+    return [
+        "## Running `abu`",
+        "",
+        "`abu <verb>` below is the engine CLI. When `abu` is not on PATH (a plugin install puts "
+        "none there), run the same verb through the plugin's own entrypoint, from the directory "
+        "you are already in:",
+        "",
+        f"    ABU={ABU_LOCATE}",
+        "    " + ABU_NODE.format(verb="<verb> ..."),
+        "",
+        "With no `node`, the engine runs directly: "
+        "`PYTHONPATH=\"${ABU%/}/engine\" python3 -m agenticstory.cli <verb> ...`. Never `cd` into "
+        "`engine/` to run it: a relative universe path then resolves inside the plugin.",
+    ]
+
+
+def strip_generated(text: str) -> str:
+    """The hand-written prose of a file: every generated fence removed."""
+    return re.sub(r"<!-- BEGIN GENERATED: ([\w-]+) -->.*?<!-- END GENERATED: \1 -->", "", text, flags=re.S)
+
+
+_VERB_RE: re.Pattern | None = None
+
+
+def invokes_abu(text: str) -> bool:
+    """True when the text tells the agent to run `abu <verb>` for a REAL verb.
+
+    Verbs come from the introspected parser, so `abu:shoot-references` (a skill) and
+    "the abu framework" (prose) never count, and a new verb counts the day it ships."""
+    global _VERB_RE
+    if _VERB_RE is None:
+        verbs = sorted((v["verb"] for v in cli_verbs()), key=len, reverse=True)
+        _VERB_RE = re.compile(r"(?<![\w:/.-])abu (?:" + "|".join(map(re.escape, verbs)) + r")(?![\w-])")
+    return bool(_VERB_RE.search(text))
+
+
+def _insert_before_first_section(text: str, block: str) -> str:
+    """Put a new fence just before the first `## ` heading outside a code fence, so the
+    note sits above the method that uses it; append when the file has no section."""
+    lines = text.split("\n")
+    in_code, start = False, 0
+    if lines and lines[0] == "---":
+        start = next((i + 1 for i in range(1, len(lines)) if lines[i] == "---"), 0)
+    for i in range(start, len(lines)):
+        if lines[i].startswith("```"):
+            in_code = not in_code
+        elif not in_code and lines[i].startswith("## "):
+            return "\n".join(lines[:i] + [block, ""] + lines[i:])
+    return text.rstrip("\n") + "\n\n" + block + "\n"
 
 
 def skill_files(root: Path) -> list[str]:
@@ -474,7 +542,12 @@ def _blocks(root: Path) -> dict:
     out = dict(BLOCKS)
     for rel in skill_files(root):
         skill = rel.split("/")[1]
-        out[rel] = {"report": lambda _root, s=skill: render_report(s)}
+        blocks = {}
+        text = (root / rel).read_text()
+        if begin("running-abu") in text or invokes_abu(strip_generated(text)):
+            blocks["running-abu"] = render_running_abu
+        blocks["report"] = lambda _root, s=skill: render_report(s)
+        out[rel] = blocks
     return out
 
 
@@ -486,7 +559,11 @@ def build_file(root: Path, rel: str) -> str:
     text = (root / rel).read_text()
     for name, render in _blocks(root)[rel].items():
         if rel.startswith("skills/") and begin(name) not in text:
-            text = text.rstrip("\n") + "\n\n" + begin(name) + "\n" + end(name) + "\n"
+            fence = begin(name) + "\n" + end(name)
+            if name == "running-abu":
+                text = _insert_before_first_section(text, fence)
+            else:
+                text = text.rstrip("\n") + "\n\n" + fence + "\n"
         text = _replace_block(text, name, render(root))
     return text
 
@@ -564,8 +641,10 @@ def check(root: Path | None = None) -> list[str]:
             problems.append(f"{rel} is missing: run `abu build-docs`")
             continue
         try:
-            if rel.startswith("skills/") and begin("report") not in path.read_text():
-                problems.append(f"{rel} has no report block: run `abu build-docs`")
+            text = path.read_text()
+            missing = [n for n in _blocks(root)[rel] if rel.startswith("skills/") and begin(n) not in text]
+            if missing:
+                problems.append(f"{rel} has no {' or '.join(missing)} block: run `abu build-docs`")
             elif build_file(root, rel) != path.read_text():
                 problems.append(f"{rel} is stale: run `abu build-docs`")
         except (ValueError, OSError) as exc:

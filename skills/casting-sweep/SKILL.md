@@ -7,6 +7,17 @@ description: Before naming any NEW character, setting, or motif in a story, swee
 
 The reuse-first gate that runs before a manuscript names anyone. It stops the universe from growing redundant entities (two characters that are really one) and turns every reuse into a crossover. Run it during story brainstorming, before the draft commits to names.
 
+<!-- BEGIN GENERATED: running-abu -->
+## Running `abu`
+
+`abu <verb>` below is the engine CLI. When `abu` is not on PATH (a plugin install puts none there), run the same verb through the plugin's own entrypoint, from the directory you are already in:
+
+    ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}
+    node "${ABU%/}/bin/abu.mjs" <verb> ...
+
+With no `node`, the engine runs directly: `PYTHONPATH="${ABU%/}/engine" python3 -m agenticstory.cli <verb> ...`. Never `cd` into `engine/` to run it: a relative universe path then resolves inside the plugin.
+<!-- END GENERATED: running-abu -->
+
 ## Inputs
 - The target universe (a path with `universe.json`).
 - The roles the draft needs (the protagonist, a mentor, a place, a recurring object).
@@ -50,5 +61,5 @@ If this skill did not one-shot (a step failed, a check refused something it shou
 
     abu report "<what happened>" --expected "<what should have happened, and why>" --command "<the exact command or ask>" --skill abu:casting-sweep
 
-Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead.
+Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead. If `abu` is not on PATH, run it as `node "${ABU%/}/bin/abu.mjs" report ...`, with `ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}`.
 <!-- END GENERATED: report -->

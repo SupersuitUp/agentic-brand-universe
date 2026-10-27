@@ -256,5 +256,87 @@ class TestReportBlock(unittest.TestCase):
             self.assertNotIn("skills/demo/SKILL.md", " ".join(docsfile.check(fake)))
 
 
+class TestRunningAbuBlock(unittest.TestCase):
+    """A skill that says `abu <verb>` also says what to do when `abu` is not on PATH
+    (2026-10-27).
+
+    `abu` is the npm package's bin. A Claude plugin install puts no `abu` on PATH, so
+    `abu kit <universe>` in add-piece-or-no-go answered "command not found" and the agent
+    went hunting through the plugin cache for bin/abu.mjs by hand. One skill of 43 carried
+    a hand-written fallback, and that one `cd`-ed into engine/, which resolves a relative
+    universe path inside the plugin. So the fallback is GENERATED, from one source, into
+    every skill whose own prose invokes a real CLI verb."""
+
+    def _fake_root(self, tmp, body):
+        fake = Path(tmp) / "repo"
+        (fake / "skills" / "demo").mkdir(parents=True)
+        (fake / "skills" / "demo" / "SKILL.md").write_text(
+            "---\nname: demo\ndescription: d\n---\n\n# Demo\n\nIntro.\n\n## Method\n\n" + body)
+        return fake
+
+    def test_detects_a_real_verb_and_ignores_prose(self):
+        self.assertTrue(docsfile.invokes_abu("Run `abu kit <universe>` first."))
+        self.assertTrue(docsfile.invokes_abu("then abu validate it"))
+        self.assertFalse(docsfile.invokes_abu("Use `abu:shoot-references` next."))
+        self.assertFalse(docsfile.invokes_abu("the abu framework is young"))
+
+    def test_report_fence_alone_does_not_count_as_invoking(self):
+        text = "Body.\n\n" + docsfile.begin("report") + "\n    abu report x\n" + docsfile.end("report") + "\n"
+        self.assertFalse(docsfile.invokes_abu(docsfile.strip_generated(text)))
+
+    def test_every_skill_invoking_abu_carries_the_block(self):
+        missing = []
+        for rel in docsfile.skill_files(ROOT):
+            text = (ROOT / rel).read_text()
+            if docsfile.invokes_abu(docsfile.strip_generated(text)) and docsfile.begin("running-abu") not in text:
+                missing.append(rel)
+        self.assertEqual(missing, [])
+
+    def test_block_names_the_node_entrypoint_and_never_cds_into_engine(self):
+        body = "\n".join(docsfile.render_running_abu())
+        self.assertIn('bin/abu.mjs" <verb>', body)
+        self.assertIn("CLAUDE_PLUGIN_ROOT", body)
+        self.assertNotIn('cd "$ABU/engine"', body)
+
+    def test_no_skill_keeps_a_hand_written_cd_engine_fallback(self):
+        offenders = [rel for rel in docsfile.skill_files(ROOT)
+                     if 'cd "$ABU/engine" && python3 -m agenticstory.cli' in (ROOT / rel).read_text()]
+        self.assertEqual(offenders, [])
+
+    def test_report_block_carries_the_fallback_too(self):
+        self.assertIn("bin/abu.mjs", "\n".join(docsfile.render_report("demo")))
+
+    def _check(self, fake):
+        """check() needs SPEC.md for the version; build() would try to regenerate its
+        fences, so it exists only while checking (the TestReportBlock pattern)."""
+        spec = fake / "SPEC.md"
+        spec.write_text(f"# Spec\n\n**v{SPEC_VERSION} — 2026-01-01.** x\n")
+        try:
+            return docsfile.check(fake)
+        finally:
+            spec.unlink()
+
+    def test_check_refuses_and_build_inserts_before_the_first_section(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = self._fake_root(tmp, "Run `abu validate <universe>`.\n")
+            self.assertTrue(any("running-abu" in p for p in self._check(fake)))
+            docsfile.build(fake)
+            text = (fake / "skills" / "demo" / "SKILL.md").read_text()
+            self.assertEqual(text.count(docsfile.begin("running-abu")), 1)
+            self.assertLess(text.index(docsfile.begin("running-abu")), text.index("## Method"))
+            self.assertGreater(text.index(docsfile.begin("running-abu")), text.index("Intro."))
+            docsfile.build(fake)
+            self.assertEqual((fake / "skills" / "demo" / "SKILL.md").read_text(), text)
+            self.assertNotIn("skills/demo/SKILL.md", " ".join(self._check(fake)))
+
+    def test_a_skill_that_never_invokes_abu_gets_no_block(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = self._fake_root(tmp, "Look at the picture.\n")
+            docsfile.build(fake)
+            self.assertNotIn(docsfile.begin("running-abu"), (fake / "skills" / "demo" / "SKILL.md").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

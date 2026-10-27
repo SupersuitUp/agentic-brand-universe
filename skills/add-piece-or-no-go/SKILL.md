@@ -9,6 +9,17 @@ A brand is small reusable parts plus the things it refuses. This skill puts ONE 
 universe's kit, where `validate` holds it to live canon and `abu check-kit` can enforce it. It never
 writes site code: surfaces outside the universe are LISTED for whoever owns them.
 
+<!-- BEGIN GENERATED: running-abu -->
+## Running `abu`
+
+`abu <verb>` below is the engine CLI. When `abu` is not on PATH (a plugin install puts none there), run the same verb through the plugin's own entrypoint, from the directory you are already in:
+
+    ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}
+    node "${ABU%/}/bin/abu.mjs" <verb> ...
+
+With no `node`, the engine runs directly: `PYTHONPATH="${ABU%/}/engine" python3 -m agenticstory.cli <verb> ...`. Never `cd` into `engine/` to run it: a relative universe path then resolves inside the plugin.
+<!-- END GENERATED: running-abu -->
+
 ## Inputs
 - The target universe (a path containing `universe.json`). Run `abu kit <universe>` first: the
   piece may already exist, and a second id for one part is the drift this record exists to stop.
@@ -59,5 +70,5 @@ If this skill did not one-shot (a step failed, a check refused something it shou
 
     abu report "<what happened>" --expected "<what should have happened, and why>" --command "<the exact command or ask>" --skill abu:add-piece-or-no-go
 
-Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead.
+Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead. If `abu` is not on PATH, run it as `node "${ABU%/}/bin/abu.mjs" report ...`, with `ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}`.
 <!-- END GENERATED: report -->
