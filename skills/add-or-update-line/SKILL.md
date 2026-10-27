@@ -10,6 +10,17 @@ them into the universe's lines record, or changes one, through the engine's verb
 the record file by hand and it never writes a surface: finding and updating the pages that carry a
 line is the lines check, which reads this record.
 
+<!-- BEGIN GENERATED: running-abu -->
+## Running `abu`
+
+`abu <verb>` below is the engine CLI. When `abu` is not on PATH (a plugin install puts none there), run the same verb through the plugin's own entrypoint, from the directory you are already in:
+
+    ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}
+    node "${ABU%/}/bin/abu.mjs" <verb> ...
+
+With no `node`, the engine runs directly: `PYTHONPATH="${ABU%/}/engine" python3 -m agenticstory.cli <verb> ...`. Never `cd` into `engine/` to run it: a relative universe path then resolves inside the plugin.
+<!-- END GENERATED: running-abu -->
+
 ## Inputs
 
 - The target universe (a path containing `universe.json`). Run `abu lines <universe>` first: the
@@ -21,9 +32,6 @@ line is the lines check, which reads this record.
 - Who may hear it: any of `public`, `client`, `team`, `cofounder`.
 
 ## Method
-
-`abu <verb>` is the engine CLI. When `abu` is not on PATH, run the same verb from the engine
-directory: `(cd "$ABU/engine" && python3 -m agenticstory.cli <verb> ...)`.
 
 1. **Look first.** `abu lines <universe>`. If the wording, or a near version of it, is already
    there, this is a reword of that line and never a new one.
@@ -100,5 +108,5 @@ If this skill did not one-shot (a step failed, a check refused something it shou
 
     abu report "<what happened>" --expected "<what should have happened, and why>" --command "<the exact command or ask>" --skill abu:add-or-update-line
 
-Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead.
+Write every field from what you just watched: an issue that says what was expected and how to reproduce it gets fixed, and "it broke" does not. A `check-kit` refusal they believe is wrong is `abu check-kit ... --report`, which attaches the findings and the rule each one broke. It prints a pre-filled GitHub issue and sends nothing: hand them the link to read and submit. Inside Freedom, `freedom:suggest-an-improvement` files it for them. If you maintain ABU itself, fix it through `evolve-abu` instead. If `abu` is not on PATH, run it as `node "${ABU%/}/bin/abu.mjs" report ...`, with `ABU=${CLAUDE_PLUGIN_ROOT:-$(ls -d ~/.claude/plugins/cache/*/abu/*/ 2>/dev/null | sort -V | tail -1)}`.
 <!-- END GENERATED: report -->
