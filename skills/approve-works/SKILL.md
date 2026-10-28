@@ -91,6 +91,8 @@ so the card shows **Re-rolling now**, and a failed run says so on the card until
 - `frapps/works-board.mjs` the page. Freedom's shell, recorder and notify bus, resolved from the
   newest installed Freedom at every start.
 - `frapps/mount.mjs` puts the page in the store and prints its links.
+- `frapps/superchoice.mjs` counts each verdict as one superchoice in Supersuit's counter (a works board is a
+  review, counted per decision, never per card); an older Supersuit with no counter counts nothing.
 - State: `~/.freedom/frapps/abu-works-board/` (`boards/`, waiting `takes/`, saved spoken
   `notes/`, cached phone `previews/`); `ABU_WORKS_BOARDS` overrides it. Verdicts live beside
   each image in `<image>.readback.json`, under `seen`.
