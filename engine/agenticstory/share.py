@@ -34,6 +34,10 @@ CARD_FILE = re.compile(r"^(opengraph-image|twitter-image)\.(tsx|jsx|ts|js|png|jp
 LAYOUT = re.compile(r"^layout\.(tsx|jsx|ts|js)$")
 KEY = re.compile(r"shareCards\.(\w+)")
 LITERAL = re.compile(r"""["'`](/og/[^"'`\s]+\.(?:png|jpe?g))["'`]""")
+# A meta-refresh redirect (a renamed page's forwarding stub) is not a page anyone shares: its link
+# lands on the target, which unfurls as itself (supersuit-wiki#17, 2026-10-28: a skill rename's
+# generated redirect needed a Share-Waiver to push).
+REDIRECT = re.compile(r"""<meta[^>]+http-equiv=["']refresh["'][^>]*content=["'][^"']*url=""", re.I)
 META = re.compile(r"""<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*content=["']([^"']+)["']""", re.I)
 
 
@@ -58,10 +62,14 @@ def _read(p: Path) -> str:
 
 
 def page_cards(root: Path, rel: str) -> set[str] | None:
-    """The cards a page names, or None when it carries its own card file (nothing to compare)."""
+    """The cards a page names, or None when there is nothing to compare: it carries its own card
+    file, or it is a redirect whose link lands on (and unfurls as) its target."""
     p = root / rel
     if HTML_PAGE.search(rel):
-        return {re.sub(r"^https?://[^/]+", "", m) for m in META.findall(_read(p))}
+        text = _read(p)
+        if REDIRECT.search(text):
+            return None
+        return {re.sub(r"^https?://[^/]+", "", m) for m in META.findall(text)}
     folder = p.parent
     if any(CARD_FILE.match(f.name) for f in folder.iterdir()):
         return None
