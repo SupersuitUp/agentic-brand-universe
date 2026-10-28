@@ -27,6 +27,7 @@ import { spawnSync, execFile, execFileSync } from "node:child_process";
 import { join, resolve, dirname, basename, extname } from "node:path";
 import { homedir } from "node:os";
 import { pathToFileURL, fileURLToPath } from "node:url";
+import { countVerdict } from "./superchoice.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORKS_BOARD = resolve(HERE, "..", "scripts", "works_board.py");
@@ -61,6 +62,10 @@ const REC = await lib("freedom-frapp-recorder.mjs");
 const NOTIFY = await lib("freedom-frapp-notify.mjs");
 let hear = null;
 try { ({ hear } = await lib("freedom-transcribe.mjs")); } catch { /* no transcriber: typed notes only */ }
+// SUPERCHOICES: each verdict is one superchoice in Supersuit's counter (frapps/superchoice.mjs). An installed
+// Supersuit older than the counter counts nothing.
+let SUPERCHOICES = null;
+try { SUPERCHOICES = await lib("supersuit-superchoices.mjs"); } catch { /* an older Supersuit */ }
 
 const STATE = process.env.ABU_WORKS_BOARDS || join(homedir(), ".freedom", "frapps", "abu-works-board");
 const TAKES = join(STATE, "takes");   // takes waiting on a Save, per batch page
@@ -365,6 +370,7 @@ export function handler(req, res, { token = "", base = "" } = {}) {
           journal(NAME, "warn", "verdict-refused", { work: k, out: r.err || r.out });
           return json(res, 409, { ok: false, error: (r.err || r.out).replace(/^works-board:\s*/, "") });
         }
+        countVerdict(SUPERCHOICES, { board: bid, key: k, image: it.image });
         NOTIFY.judged({ source: SOURCE, title: `works board: ${bid}`, item: `${k}: ${verdict}${text ? ` (${text.slice(0, 120)})` : ""}`,
           notes: `${it.image}.readback.json` });
         let job = null;
