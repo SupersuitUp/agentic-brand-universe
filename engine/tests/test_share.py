@@ -104,6 +104,13 @@ class CheckShare(unittest.TestCase):
         hits, _ = self.s.check()
         self.assertEqual(hits[0]["sharedWith"], "about.html")
 
+    def test_a_redirect_stub_is_not_a_page_and_needs_no_card_or_waiver(self):
+        # supersuit-wiki#17: a renamed skill's generated forwarding page, exactly as make-redirects writes it.
+        put(self.s.root, "static/skills/old-name/index.html", '<meta http-equiv="refresh" content="0; url=/skills/new-name">\n<meta name="robots" content="noindex, nofollow">\n')
+        put(self.s.root, "moved.html", '<meta HTTP-EQUIV="Refresh" content="0;URL=/about.html">\n<meta property="og:image" content="https://x.test/og/about.png">\n')
+        self.s.commit("rename")
+        self.assertEqual(self.s.check(), ([], None))
+
     def test_a_share_waiver_lets_a_deliberate_exception_through_on_the_record(self):
         put(self.s.root, "app/y/page.tsx", 'export const metadata = { title: "Y" };\n')
         git(self.s.root, "add", ".")
