@@ -335,6 +335,32 @@ class ComposeTest(Base):
         with Image.open(dest) as im:
             self.assertEqual(max(im.size), 1536)
 
+    def test_the_exported_recipe_carries_no_private_path(self):
+        """SPEC 3.2.1: the wiki serves the exported recipe, so no home-folder or temp path
+        reaches it; the universe's own composite recipe keeps every path as recorded."""
+        s = self.spec()
+        home = "/" + "Users" + "/someone"   # built, so no literal home path ships in a skill
+        for p in s["panels"]:
+            strip.cmd_render(s, p["id"], runner=fake_generate)
+            rec = self.work / "panels" / f"{p['id']}.r1.png.recipe.json"
+            r = json.loads(rec.read_text())
+            r["refs"].append({"path": home + "/Documents/repo/reference/witney/face.png"})
+            rec.write_text(json.dumps(r))
+            strip.cmd_judge(s, p["id"], 1, "pass")
+        dest = self.tmp / "wiki" / "static" / "img" / "illustrations" / "x.webp"
+        res = strip.cmd_compose(s, str(dest), "static/img/illustrations/x.webp")
+        text = Path(res["export"]["recipe"]).read_text()
+        for bad in (home, str(self.tmp), "/var/folders/", "/private/tmp"):
+            self.assertNotIn(bad, text)
+        r = json.loads(text)
+        self.assertEqual(r["universe"], "uni")
+        self.assertIn("~/Documents/repo/reference/witney/face.png", text)
+        self.assertTrue(r["publicPaths"]["recordedAt"].startswith("uni/"))
+        self.assertEqual(strip.validate_recipe(r, "static/img/illustrations/x.webp")
+                         + strip.completeness(r), [])
+        # the record in the universe is untouched
+        self.assertIn(home, Path(res["recipe"]).read_text())
+
     def test_real_wiki_gate_when_present(self):
         # Point ABU_WIKI_PROVENANCE_GATE at a wiki's check-image-provenance.mjs (it ships in
         # @supersuit/docusaurus-preset-wiki under src/cli/) to run the real gate here.

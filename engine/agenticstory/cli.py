@@ -25,6 +25,7 @@ Agentic Brand Universe CLI.
                                                # retire an entity from NEW casting
   abu unarchive <universe> <eid>      # put a retired entity back in service
   abu archived <universe> [--story ID] # what is retired, and who still casts it
+  abu publicize-recipes FILE... [--check] [--root PREFIX=LABEL]  # no home/temp path in a PUBLISHED recipe
 
 Exit code is non-zero when validation/assertion finds problems, so gen scripts
 and CI can gate on it.
@@ -154,6 +155,13 @@ def build_parser() -> argparse.ArgumentParser:
     ar.add_argument("--on", default=None, help="ISO date; defaults to today")
     ua = sub.add_parser("unarchive", help="put a retired entity back in service")
     ua.add_argument("universe"); ua.add_argument("eid")
+    pr = sub.add_parser("publicize-recipes",
+                        help="rewrite home/temp paths in PUBLISHED .recipe.json files (SPEC 3.2.1)")
+    pr.add_argument("files", nargs="+", help=".recipe.json files a public site serves")
+    pr.add_argument("--root", action="append", default=[], metavar="PREFIX=LABEL",
+                    help="name the repo for a path prefix that no longer resolves (repeatable)")
+    pr.add_argument("--check", action="store_true",
+                    help="change nothing; exit 1 if any file still carries a private path")
     ad = sub.add_parser("archived", help="list retired entities, or who still casts them")
     ad.add_argument("universe"); ad.add_argument("--story", default=None)
     ls2 = sub.add_parser("lock-shot", help="lock a generated reference shot into an entity")
@@ -678,6 +686,17 @@ def main(argv: list[str] | None = None) -> int:
                 if not hits:
                     print("nothing else carries an earlier wording")
         return 0
+    if args.cmd == "publicize-recipes":
+        from .public_paths import publicize_file
+        roots = dict(r.split("=", 1) for r in args.root)
+        dirty = 0
+        for f in args.files:
+            n = publicize_file(Path(f), roots, write=not args.check)
+            if n:
+                dirty += 1
+                print(f"{'would rewrite' if args.check else 'rewrote'} {n:>4} string(s)  {f}")
+        print(f"{dirty} of {len(args.files)} recipe(s) {'carry' if args.check else 'had'} private paths")
+        return 1 if (args.check and dirty) else 0
     store = CanonStore(args.universe)
 
     if args.cmd == "validate":

@@ -110,6 +110,7 @@ answers questions about it, and refuses renders whose references do not exist on
 | `lock-shot` | lock a generated reference shot into an entity |
 | `massing` | render a setting's blueprint as a code-built 3D massing sheet from a declarative spec (deterministic, no model, no cost) |
 | `massing-scaffold` | write a STARTER massing spec for a rectangular room (shell + opposed cameras + notes stub) to edit, so authoring a blueprint does not start from a blank file |
+| `publicize-recipes` | rewrite home/temp paths in PUBLISHED .recipe.json files (SPEC 3.2.1) |
 | `relations` | list an entity's typed relations |
 | `report` | file what ABU got wrong: prints (or --open opens) a pre-filled GitHub issue; nothing is sent until you press submit |
 | `seed` | write a brand direction into a scaffolded universe (palette, type, mark, brief, surfaces) |
@@ -180,6 +181,7 @@ Headlines only, parsed from `SPEC.md`. Read the spec for the full text of any en
 | Version | What changed |
 |---|---|
 | v0.65 | a lines record names its standard, and rewording or retiring a line prints > every place that still carries an earlier wording. |
+| v0.65 | a published recipe carries no private path. |
 | v0.64 | a strip can KEEP an approved panel, and every drawing verb refuses an > archived entity. |
 | v0.62 | where a look may be used, typed; an explore pick becomes a pack in one > command; a set is judged at its real size; a provider finds its own key. |
 | v0.61 | the LINES: a universe holds its brand's approved language, with every > wording it has had. |

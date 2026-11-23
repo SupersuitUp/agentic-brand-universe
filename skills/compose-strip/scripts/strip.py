@@ -733,6 +733,20 @@ def cmd_compose(spec: dict, export: str | None = None, export_asset: str | None 
     return result
 
 
+def _publicize(recipe: dict, spec: dict, src: Path) -> dict:
+    eng = str(ABU / "engine")
+    if eng not in sys.path:
+        sys.path.insert(0, eng)
+    from agenticstory.public_paths import publicize_recipe, _git_label
+    uni = str(spec["_universe"])
+    found = _git_label(uni)
+    label = found[1] if found and Path(found[0]).resolve() == Path(uni).resolve() \
+        else Path(uni).name
+    out, _ = publicize_recipe(recipe, roots={uni: label},
+                              recorded_at=str(src) + ".recipe.json")
+    return out
+
+
 def export_webp(spec: dict, src: Path, recipe: dict, dest: Path, asset: str | None) -> dict:
     """The copy a wiki keeps: EXIF-transposed, capped on its long edge, WebP. Its recipe is the
     composite's own, restated for where it will sit, plus a `derived` block naming the transform,
@@ -748,6 +762,10 @@ def export_webp(spec: dict, src: Path, recipe: dict, dest: Path, asset: str | No
          "derived": {"from": str(src), "fromSha256": recipe["sha256"],
                      "op": f"exif_transpose, {ex['maxEdge']} max edge, webp q{ex['quality']}",
                      "on": _now()}}
+    # THE EXPORT IS PUBLIC: a wiki serves this recipe beside its image. Home-folder and
+    # temporary-folder paths are rewritten by the ONE shared rule (SPEC 3.2.1), the universe
+    # becomes its repo name, and the recipe says where the recorded original lives.
+    r = _publicize(r, spec, src)
     problems = validate_recipe(r, asset) + completeness(r)
     if problems:
         raise StripError("the exported recipe would not pass provenance:\n  " + "\n  ".join(problems))

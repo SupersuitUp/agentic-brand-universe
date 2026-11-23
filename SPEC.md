@@ -13,6 +13,11 @@ documentation brand: explanatory plates, ink-line illustration, share cards, a s
 > `--search-root`) for the line's earlier wordings and print `file:line` for each hit. Additive:
 > no universe migrates.
 
+> **v0.65 changelog — a published recipe carries no private path.** §3.2.1: every recipe written
+> for a public surface goes through one engine function that writes home-folder paths as `~` and
+> temporary-folder paths as `<repo>/<path>`, and says so in `publicPaths`; `abu publicize-recipes`
+> cleans recipes already published. Additive: no universe migrates.
+
 > **v0.64 changelog — a strip can KEEP an approved panel, and every drawing verb refuses an
 > archived entity.** §4.15.1: `compose-strip adopt` reuses an existing render and its recipe
 > byte for byte as a panel's roll, so a strip whose cast changes in some panels no longer
@@ -1164,6 +1169,29 @@ This exists because the alternatives were dishonest. Twelve blessed crops of kno
 renders entered `christofuturism`'s `gary` photo stack on 2026-08-01. `backfill-provenance` would
 have stamped each one `source` ("there is no generating call to record") when the source hash, the
 crop box and the original prompt were all in hand.
+
+#### 3.2.1 A published recipe carries no private path — v0.65
+
+A recipe records the absolute paths a render was made from, which is right in the universe and
+wrong on the open web: a wiki serves the recipe beside its image, and `/Users/<name>/...` names a
+person and their machine. So every recipe the framework writes FOR A PUBLIC SURFACE goes through
+one engine function, `engine/agenticstory/public_paths.py` (`publicize_recipe`), and every string
+in it is rewritten by one rule:
+
+- a home-folder path (`/Users/<name>/...`, `/home/<name>/...`) becomes `~/...`;
+- a temporary-folder path (`/tmp`, `/private/tmp`, `/var/folders/.../T`) becomes `<repo>/<path>`
+  when a caller-named root or a live git checkout resolves it, else `<tmp>/<name>/...`;
+- the recipe gains `publicPaths` (`by`, `rule`, `rewritten`, and `recordedAt`, the published
+  form of where the recipe as recorded lives).
+
+Only the published COPY is rewritten; the recipe beside the work keeps every path as recorded.
+Where it applies today: `compose-strip compose --export` (the universe becomes its repo name).
+For recipes already published, `abu publicize-recipes FILE... [--check] [--root PREFIX=LABEL]`
+applies the same function in place and leaves a clean file byte for byte as it was.
+
+Earned 2026-11-23: the supersuit.wiki chief-of-agents recipe served 96 home-folder paths, and
+its replacement would have added dead temp-worktree paths. Gary Sheng: "Pluma fixes the public
+recipe paths".
 
 ### 3.3 Form (a kind of deliverable)
 What makes a work the KIND of thing it is. A storybook, a flyer, a meme, a share card, an explanatory

@@ -1,3 +1,7 @@
+## 2026-11-23: a published recipe carries no private path (v1.51.0, spec v0.65)
+
+- 2026-11-23 v1.51.0: one engine function (`public_paths.py`) rewrites home-folder paths to `~` and temp paths to `<repo>/<path>` in every recipe written for a public surface (compose-strip's wiki export), stamping `publicPaths`; `abu publicize-recipes` cleans recipes already published. supersuit.wiki was serving 96 home-folder paths in one hero recipe.
+
 ## 2026-11-23: a works board mounts in a Supersuit store (v1.50.2)
 
 - 2026-11-23 v1.50.2: the works board's mount resolves the store's renamed host library and CLI (supersuit-tile-app-host.mjs, create-or-manage-a-supertool), newest name first. 1.50.1 found the Supersuit cache but still could not mount a board there.
