@@ -166,6 +166,29 @@ def _guard_gate(fired):
     return _prompt_guards_module().readback_gate(fired)
 
 
+def archived_entity_problem(specs, allow=False):
+    """The shared archived-entity check (engine/agenticstory/lifecycle.py, SPEC 4.15.2), run
+    before anything is spent. Returns the refusal text, or None. A retired entity must not be
+    drawn into a NEW work through this door either; `--allow-archived` is the recorded
+    exception for a deliberate re-render of something that shipped before the archive."""
+    if allow or not specs:
+        return None
+    _engine_on_path()
+    from agenticstory.lifecycle import archived_notes, refusal
+    from agenticstory.store import CanonStore
+    cast = []
+    for spec in specs:
+        if ":" not in spec:
+            continue
+        upath, _, rest = spec.rpartition(":")
+        eid = rest.partition("@")[0]
+        ent = CanonStore(os.path.expanduser(upath)).entity(eid)
+        if ent is not None:
+            cast.append((eid, ent.raw))
+    notes = archived_notes(cast)
+    return ("generate.py: " + refusal("--entity", notes, "pass --allow-archived")) if notes else None
+
+
 def resolve_entities(specs, required_only=False, with_photos=False):
     """Resolve `UNIVERSE:ID[@LOOK]` specs to (refs, invariants, rules, meta).
 
@@ -437,6 +460,10 @@ def main():
                          "a head-to-head test showed blessed plates alone produced the better "
                          "likeness, because a plate is an APPROVED likeness under controlled "
                          "light, not merely a derivative of a photo.")
+    ap.add_argument("--allow-archived", action="store_true",
+                    help="Draw an entity whose lifecycle is archived anyway. Refused by default "
+                         "(SPEC 4.15.2); use only to re-render a work that shipped before the "
+                         "archive. Recorded in the recipe as allowArchived.")
     ap.add_argument("--entity-required-only", action="store_true",
                     help="Pass only each entity's requiredForRender sheets instead of every "
                          "locked angle. Narrower, and it lets a face drift; the default is the "
@@ -617,6 +644,9 @@ def main():
     # style pack anchor: a style pack pulls hard toward its own faces, so the
     # subject's own plates must outrank it. Ordering the other way is how a pack
     # wins an argument it should never have been in.
+    archived = archived_entity_problem(a.entity, allow=a.allow_archived)
+    if archived:
+        sys.exit(archived)
     if a.entity:
         canon_refs, invariants, rules, resolved_meta = resolve_entities(
             a.entity, required_only=a.entity_required_only,
@@ -791,6 +821,8 @@ def main():
     }
     if recipe_entities:
         recipe["entities"] = recipe_entities
+        if a.allow_archived:
+            recipe["allowArchived"] = True
         gate = entity_gate(recipe_entities)
         if gate:
             recipe["entityGate"] = gate

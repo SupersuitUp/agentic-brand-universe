@@ -1,10 +1,18 @@
 # Agentic Brand Universe — Cartridge Spec
 
-**v0.63 — 2026-10-16.** The version-controlled brand-universe (cartridge) format: the first-principles
+**v0.64 — 2026-11-23.** The version-controlled brand-universe (cartridge) format: the first-principles
 architecture for a brand as version-controlled canon + golden assets, agentically writable,
 composable, and evolvable, rendered into any deliverable. Home: `agenticbranduniverse.com`.
 Reference implementations: the Nation of Fire universe (storybooks) and Build on Anthropic (a
 documentation brand: explanatory plates, ink-line illustration, share cards, a slide deck).
+
+> **v0.64 changelog — a strip can KEEP an approved panel, and every drawing verb refuses an
+> archived entity.** §4.15.1: `compose-strip adopt` reuses an existing render and its recipe
+> byte for byte as a panel's roll, so a strip whose cast changes in some panels no longer
+> regenerates the ones that did not. §4.15.2: the archived-entity refusal moves into one engine
+> check, `lifecycle.py`, used by compose-spread, compose-strip and `on-brand-image --entity`;
+> before this only compose-spread refused, so a retired design came back through a strip.
+> Additive: no universe migrates.
 
 > **v0.62 changelog — where a look may be used, typed; an explore pick becomes a pack in one
 > command; a set is judged at its real size; a provider finds its own key.** §4.7: a Style Pack's
@@ -2729,6 +2737,40 @@ refused by the supersuit.wiki gate and fixed by hand in the wiki worktree.
 **On the works board**, a strip's recipe names its `stripSpec`, so a RE-ROLL tap's detached job is
 briefed to reopen the panel the note is about and recompose, never to re-roll the composite from a
 recipe that records a composition rather than a model call.
+
+
+#### 4.15.1 Keeping an approved panel (`adopt`) — v0.64
+
+`strip.py adopt <spec> --panel ID --from RENDER.png --reason "..."` makes an EXISTING render this
+panel's next roll instead of drawing a new one. The render and the recipe beside it are copied
+byte for byte into `panels/`, so `panelRecipes[ID]` in the composite is the original recipe,
+unchanged, and the panel's entry in `panels` carries `adoptedFrom` (source path, the render's and
+the recipe's sha256, the reason, the date). It refuses a render with no recipe, or a recipe with
+no prompt or no model/provider, because the composite recipe must name every input. An adopted
+roll is still a roll: it counts against the cap, the binding check runs at adoption, and nothing
+is kept until `judge` records a read-back PASS.
+
+**When.** A cast change, a retired entity or a note touches SOME panels of an approved strip and
+the rest must stay as they are. Earned 2026-11-23: two continental-works wiki heroes had their
+agentspace panels redrawn without the archived orb, and without this verb the only path through
+the script also regenerated the approved real-room panel of the person, trading a picture Gary had
+approved for a new roll of her.
+
+#### 4.15.2 Every drawing verb refuses an archived entity — v0.64
+
+An entity with `lifecycle: "archived"` (v0.19) is refused at the point of NEW drawing by every verb
+that draws, through ONE engine check, `engine/agenticstory/lifecycle.py` (`archived_notes`,
+`refusal`): `compose-spread` (per spread; waived by `allowArchived` on the spread),
+`compose-strip` (`render` and `adopt`, per panel; waived by `allowArchived` on the panel, which is
+then passed on as `--allow-archived`; `adopt` also checks the entities the adopted recipe drew),
+and `on-brand-image --entity` (waived by `--allow-archived`, recorded in the recipe as
+`allowArchived: true`). The refusal names the entity, the date, the reason and `supersededBy` when
+there is one, and nothing is spent or reserved before it. Lifecycle still never touches
+`assert-story` or an already-rendered file, so archiving cannot break history.
+
+Earned 2026-11-23: continental-works archived freedom-character (Gary Sheng: "Most important thing
+to retire is the heavenly orb with halo I think"), and its wiki-hero form would still have drawn
+her, because until v0.64 only compose-spread looked at lifecycle, with its own inline copy.
 
 ## 5. Evolution & versioning
 

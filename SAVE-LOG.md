@@ -1,3 +1,7 @@
+## 2026-11-23: a strip keeps an approved panel; every drawing verb refuses an archived entity (v1.50.0, spec v0.64)
+
+- 2026-11-23 v1.50.0: `compose-strip adopt` reuses an approved render and its recipe byte for byte as a panel, and compose-strip plus `on-brand-image --entity` now refuse archived entities through one engine check (`lifecycle.py`) shared with compose-spread. Earned by the continental-works orb retirement, where a strip would have redrawn an approved panel and still drawn the retired orb.
+
 ## 2026-10-14: the report step is in every skill (v1.46.0)
 
 v1.46.0: the 1.45.0 report offer lived only in the front door and the steward, while misfires happen

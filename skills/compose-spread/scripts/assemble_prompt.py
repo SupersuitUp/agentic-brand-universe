@@ -2013,26 +2013,19 @@ def build(uroot: Path, spec: dict, spread_id: str) -> dict:
     # allowArchived on the spread, which leaves an auditable trace of the decision,
     # while a NEW book cannot quietly pick the retired thing back up.
     if not eff.get("allowArchived"):
-        retired = []
-        for c in entries:
-            ent0 = load_entity(uroot, c["id"])
-            if ent0.get("lifecycle") == "archived":
-                a = ent0.get("archived") or {}
-                note = f"'{c['id']}' is ARCHIVED"
-                if a.get("on"):
-                    note += f" on {a['on']}"
-                if a.get("reason"):
-                    note += f" ({a['reason']})"
-                if a.get("supersededBy"):
-                    note += f" -> cast '{a['supersededBy']}' instead"
-                retired.append(note)
+        # One shared check for every drawing verb (engine/agenticstory/lifecycle.py, SPEC
+        # 4.15.2), so compose-spread, compose-strip and on-brand-image cannot drift apart.
+        root = _abu_root()
+        if root is None:
+            raise Refuse("the ABU engine could not be located to run the archived-entity "
+                         "check. Reinstall the plugin; casting a retired entity silently is "
+                         "the defect that check exists to prevent.")
+        if str(root / "engine") not in sys.path:
+            sys.path.insert(0, str(root / "engine"))
+        from agenticstory.lifecycle import archived_notes, refusal
+        retired = archived_notes((c["id"], load_entity(uroot, c["id"])) for c in entries)
         if retired:
-            raise Refuse(
-                f"ARCHIVED ENTITY CAST ({spread_id}): "
-                + "; ".join(retired)
-                + ". Cast the replacement, or set allowArchived on this spread if you are "
-                  "deliberately re-rendering a book that shipped before the archive."
-            )
+            raise Refuse(refusal(spread_id, retired, "set allowArchived on this spread"))
 
     # WHEN this spread happens: a year, or a beat index. Whatever scale the
     # universe uses, the gate only ever compares numbers.

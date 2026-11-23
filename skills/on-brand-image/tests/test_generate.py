@@ -1363,5 +1363,39 @@ class TestScopedPackNeedsAUse(GenerateCase):
         msg = self.expect_exit(*self.base("--use", self.USE))
         self.assertIn("--style-pack", msg)
 
+
+class TestArchivedEntityRefusal(GenerateCase):
+    """SPEC 4.15.2: an archived entity is not drawn into a NEW work through --entity either.
+    Earned 2026-11-23: continental-works archived freedom-character (the haloed orb) and this
+    door would still have drawn her, because only compose-spread looked at lifecycle."""
+
+    def archived_chip(self, **archived):
+        e = entity("chip", sheets={"face": "reference/chip/face.png"})
+        e["lifecycle"] = "archived"
+        e["archived"] = {"on": "2026-11-23", "reason": "retired design", **archived}
+        u = build_universe(self.tmp / "uni", entities=[e])
+        png(Path(u) / "reference" / "chip" / "face.png", extra=b"f")
+        return u
+
+    def test_an_archived_entity_refuses_before_anything_is_spent(self):
+        u = self.archived_chip(supersededBy="chip-two")
+        msg = self.expect_exit(*self.base("--entity", f"{u}:chip"))
+        self.assertIn("ARCHIVED ENTITY CAST", msg)
+        self.assertIn("retired design", msg)
+        self.assertIn("chip-two", msg)
+        self.assertEqual(self.calls, [])
+
+    def test_allow_archived_draws_it_and_records_the_decision(self):
+        u = self.archived_chip()
+        r = self.run_main(*self.base("--entity", f"{u}:chip", "--allow-archived"))
+        self.assertTrue(r.recipe["allowArchived"])
+
+    def test_the_wording_is_the_shared_engine_check(self):
+        u = self.archived_chip()
+        gen._engine_on_path()
+        from agenticstory import lifecycle
+        with mock.patch.object(lifecycle, "refusal", lambda where, notes, o: "SHARED-CHECK"):
+            self.assertEqual(gen.archived_entity_problem([f"{u}:chip"]), "generate.py: SHARED-CHECK")
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

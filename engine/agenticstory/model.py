@@ -468,16 +468,10 @@ class Entity:
         return ((self.raw.get("archived") or {}).get("supersededBy")) or None
 
     def archive_note(self) -> str:
-        """One line an author can act on: why it was retired and what to cast instead."""
-        a = self.raw.get("archived") or {}
-        bits = [f"'{self.id}' is ARCHIVED"]
-        if a.get("on"):
-            bits.append(f"on {a['on']}")
-        if a.get("reason"):
-            bits.append(f"({a['reason']})")
-        if a.get("supersededBy"):
-            bits.append(f"-> cast '{a['supersededBy']}' instead")
-        return " ".join(bits)
+        """One line an author can act on: why it was retired and what to cast instead.
+        The wording lives in lifecycle.py, shared with every drawing verb's refusal."""
+        from .lifecycle import archive_note
+        return archive_note(self.id, self.raw)
 
     def is_locked_setting(self) -> bool:
         """A setting/visual-metaphor is locked only when the RENDER GATE would accept it.

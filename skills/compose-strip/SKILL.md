@@ -85,6 +85,24 @@ python3 $S stage   strip.json --manifest heroes.json --board-id <id> --title "<T
    the phone link through `freedom:message-myself`. A RE-ROLL tap on a strip does not re-roll the
    composite: its brief sends the job to `reopen` the panel the note is about.
 
+**Keep an approved panel instead of redrawing it (SPEC 4.15.1).** When only some panels change
+(a cast change, a retired entity, a note about one beat), reuse the approved render of each panel
+that stays:
+
+```bash
+python3 $S adopt strip.json --panel p1 --from <earlier-work>/castle-p1.r3.png \
+        --reason "approved 2026-09-25; nothing in this beat changes"
+python3 $S judge strip.json --panel p1 --roll 1 --verdict pass --guard ...
+```
+
+The render and its recipe are copied byte for byte, so the composite's `panelRecipes` carries the
+original recipe unchanged and the panel entry says `adoptedFrom`. It is still read back and judged.
+
+**An archived entity is refused (SPEC 4.15.2).** `render` and `adopt` refuse a panel that casts,
+or an adopted recipe that drew, an entity whose `lifecycle` is `archived`, through the same engine
+check compose-spread and `on-brand-image --entity` use. `allowArchived: true` on the panel is the
+recorded exception for re-drawing a work that shipped before the archive.
+
 `reopen --panel p2 --reason "..."` un-keeps a kept panel (the kept roll goes to `rejected/` with the
 reason) and restarts that panel's cap, because a person's objection is a new judgement.
 

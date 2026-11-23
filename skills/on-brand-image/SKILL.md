@@ -5,6 +5,12 @@ description: Generate ONE on-brand image from a Style Pack (SPEC §4.7) — a po
 
 # On-Brand Image
 
+
+**An archived entity is refused (SPEC 4.15.2).** `--entity` refuses any entity whose `lifecycle` is
+`archived` before anything is spent, naming the reason and the replacement, through the same engine
+check every drawing verb uses. `--allow-archived` draws it anyway for a deliberate re-render of a
+work that shipped before the archive, and the recipe records `allowArchived: true`.
+
 ## When a render looks subtly wrong, suspect UNSTATED PHYSICS first
 
 The commonest defect in a finished-looking image is not style, anatomy or

@@ -379,5 +379,95 @@ class StageTest(Base):
         self.assertEqual(items[0]["context"], "new line")
 
 
+
+class AdoptTest(Base):
+    """SPEC 4.15.1: a panel can keep an approved render instead of being redrawn, and the
+    composite carries that render's ORIGINAL recipe unchanged."""
+
+    def approved_render(self, colour=(7, 77, 177)):
+        src = self.tmp / "earlier-work" / "castle-p1.r3.png"
+        src.parent.mkdir(parents=True)
+        Image.new("RGB", (1024, 1536), colour).save(src)
+        recipe = {"provider": "gpt-image-2.5-sunburst", "model": "gpt-image-2.5-sunburst",
+                  "prompt": "the approved real-room panel, exactly as it was drawn",
+                  "refs": [{"path": "/u/reference/witney/face.png"}],
+                  "entities": [{"id": "witney"}], "timestamp": "2026-09-25T14:00:00+00:00",
+                  "sha256": "orig"}
+        Path(str(src) + ".recipe.json").write_text(json.dumps(recipe, indent=2))
+        return src, recipe
+
+    def test_adopted_panel_is_byte_identical_and_its_recipe_is_unchanged_in_the_composite(self):
+        s = self.spec()
+        src, recipe = self.approved_render()
+        rec = strip.cmd_adopt(s, "p1", str(src), "approved 2026-09-25; nothing in it changes")
+        kept = self.work / rec["path"]
+        self.assertEqual(kept.read_bytes(), src.read_bytes())
+        self.assertEqual(Path(str(kept) + ".recipe.json").read_bytes(),
+                         Path(str(src) + ".recipe.json").read_bytes())
+        strip.cmd_judge(s, "p1", rec["roll"], "pass")
+        for pid in ("p2", "p3"):
+            strip.cmd_render(s, pid, runner=fake_generate)
+            strip.cmd_judge(s, pid, 1, "pass")
+        res = strip.cmd_compose(s)
+        r = json.loads(Path(res["recipe"]).read_text())
+        self.assertEqual(r["panelRecipes"]["p1"], recipe)
+        self.assertEqual(r["panels"][0]["adoptedFrom"]["path"], str(src.resolve()))
+        self.assertNotIn("adoptedFrom", r["panels"][1])
+        self.assertEqual(strip.validate_recipe(r, "x.png") + strip.completeness(r), [])
+        im = Image.open(res["out"]).convert("RGB")
+        self.assertEqual(im.getpixel((16 + 10, 500)), (7, 77, 177))
+
+    def test_adopted_roll_still_waits_for_a_read_back(self):
+        s = self.spec()
+        src, _ = self.approved_render()
+        strip.cmd_adopt(s, "p1", str(src), "reuse")
+        with self.assertRaisesRegex(strip.StripError, "not been judged"):
+            strip.cmd_render(s, "p1", runner=fake_generate)
+
+    def test_adopt_refuses_a_render_with_no_recipe(self):
+        s = self.spec()
+        src, _ = self.approved_render()
+        Path(str(src) + ".recipe.json").unlink()
+        with self.assertRaisesRegex(strip.StripError, "recipe"):
+            strip.cmd_adopt(s, "p1", str(src), "reuse")
+
+
+class ArchivedEntityTest(Base):
+    """SPEC 4.15.2: compose-strip refuses an archived entity through the shared engine check."""
+
+    def archive(self, eid, **extra):
+        d = self.uni / "canon" / "entities"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{eid}.json").write_text(json.dumps({
+            "id": eid, "kind": "character", "lifecycle": "archived",
+            "archived": {"on": "2026-11-23", "reason": "retired design", **extra}}))
+
+    def test_render_refuses_an_archived_entity_before_reserving_a_roll(self):
+        self.archive("witney", supersededBy="someone-new")
+        s = self.spec()
+        called = []
+        with self.assertRaisesRegex(strip.StripError, "ARCHIVED ENTITY CAST.*someone-new"):
+            strip.cmd_render(s, "p1", runner=lambda c: called.append(c))
+        self.assertEqual(called, [])
+        self.assertEqual(strip.load_state(s)["panels"]["p1"]["rolls"], [])
+
+    def test_allow_archived_on_the_panel_waives_it_and_tells_generate(self):
+        self.archive("witney")
+        s = self.spec()
+        s["panels"][0]["allowArchived"] = True
+        cmd = strip.cmd_render(s, "p1", dry_run=True)["cmd"]
+        self.assertIn("--allow-archived", cmd)
+
+    def test_adopt_refuses_a_render_that_drew_an_archived_entity(self):
+        self.archive("the-orb")
+        s = self.spec()
+        src = self.tmp / "old.png"
+        Image.new("RGB", (64, 96)).save(src)
+        Path(str(src) + ".recipe.json").write_text(json.dumps({
+            "model": "m", "prompt": "an orb", "refs": [], "timestamp": "t",
+            "entities": [{"id": "the-orb"}]}))
+        with self.assertRaisesRegex(strip.StripError, "the-orb"):
+            strip.cmd_adopt(s, "p2", str(src), "reuse")
+
 if __name__ == "__main__":
     unittest.main()

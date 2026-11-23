@@ -31,6 +31,8 @@ Verbs (paths in the spec resolve against the universe; `out` against the spec's 
     strip.py render  <spec> --panel ID [--dry-run]   one roll: generate.py, then the binding check
     strip.py judge   <spec> --panel ID --roll N --verdict pass|defect
                             [--reason "..."] [--counter "..."] [--guard NAME=VERDICT[:why]]...
+    strip.py adopt   <spec> --panel ID --from RENDER.png --reason "..."   keep an approved render
+                            (and its recipe, byte for byte) as this panel's next roll; judge it
     strip.py reopen  <spec> --panel ID --reason "..." [--counter "..."]   un-keep a kept panel
     strip.py compose <spec> [--export PATH.webp --export-asset static/img/.../x.webp] [--json]
     strip.py stage   <spec> --manifest PATH [--board-id ID] [--title T] [--context "..."]
@@ -186,6 +188,24 @@ def panel(spec: dict, pid: str) -> dict:
     raise StripError(f"no panel {pid!r}; panels are {', '.join(p['id'] for p in spec['panels'])}")
 
 
+def archived_problem(spec: dict, p: dict, ids: list[str] | None = None) -> str | None:
+    """The shared archived-entity check (engine/agenticstory/lifecycle.py, SPEC 4.15.2), run
+    before a roll is reserved or a render adopted. `allowArchived: true` on the panel is the
+    recorded exception for re-drawing a work that shipped before the archive."""
+    if p.get("allowArchived"):
+        return None
+    eng = str(ABU / "engine")
+    if eng not in sys.path:
+        sys.path.insert(0, eng)
+    from agenticstory.lifecycle import archived_notes, refusal
+    cast = []
+    for eid in ids if ids is not None else p["entities"]:
+        f = spec["_universe"] / "canon" / "entities" / f"{eid}.json"
+        cast.append((eid, json.loads(f.read_text()) if f.exists() else None))
+    notes = archived_notes(cast)
+    return refusal(f"panel {p['id']}", notes, "set allowArchived on this panel") if notes else None
+
+
 def entity_args(spec: dict, p: dict) -> list[str]:
     return [f"{spec['_universe']}:{e}" for e in p["entities"]]
 
@@ -308,6 +328,8 @@ def generate_cmd(spec: dict, p: dict, out: Path, prompt_file: Path) -> list[str]
         cmd += ["--model", r["model"]]
     for e in entity_args(spec, p):
         cmd += ["--entity", e]
+    if p.get("allowArchived"):
+        cmd.append("--allow-archived")
     for ref in p.get("refs") or []:
         cmd += ["--ref", str(spec["_universe"] / ref)]
     return cmd
@@ -331,6 +353,9 @@ def verify(spec: dict, p: dict, png: Path, guards: list[str] | None = None) -> t
 
 def cmd_render(spec: dict, pid: str, dry_run: bool = False, runner=subprocess.run) -> dict:
     p = panel(spec, pid)
+    archived = archived_problem(spec, p)
+    if archived:
+        raise StripError(archived)
     pdir = panels_dir(spec)
     with locked(spec):
         st = load_state(spec)
@@ -362,6 +387,58 @@ def cmd_render(spec: dict, pid: str, dry_run: bool = False, runner=subprocess.ru
             raise StripError(f"generate.py exited {rc} for {pid} roll {n}; no image and recipe "
                              f"pair. Nothing was recorded, so the same roll number is free again.")
         rec.update(renderedOn=_now(), binding="ok" if ok else "broken", problems=problems)
+        save_state(spec, st)
+    return rec
+
+
+def cmd_adopt(spec: dict, pid: str, src: str, why: str) -> dict:
+    """KEEP AN APPROVED PANEL instead of redrawing it (SPEC 4.15.1). The render and its recipe are
+    copied byte for byte into panels/ as this panel's next roll, so the composite's panelRecipes
+    carries the ORIGINAL recipe unchanged and the panel entry says where it came from. It is
+    then a roll like any other: the binding check runs now, and `judge` records the read-back.
+
+    Earned 2026-11-23: two wiki heroes needed their agentspace panels redrawn without a retired
+    entity, and the only way through this script was to regenerate the unchanged real-room panel
+    too, trading an approved picture of the person for a new roll of her."""
+    p = panel(spec, pid)
+    if not why.strip():
+        raise StripError("adopt needs --reason: say why this render is reused rather than drawn")
+    png = Path(src).expanduser().resolve()
+    rec_src = Path(str(png) + ".recipe.json")
+    if not png.exists() or not rec_src.exists():
+        raise StripError(f"adopt needs an existing render AND its recipe beside it: "
+                         f"{png} / {rec_src.name}. A panel with no recipe cannot be composed "
+                         f"into a strip whose recipe has to name every input.")
+    recipe = json.loads(rec_src.read_text())
+    if not recipe.get("prompt") or not (recipe.get("model") or recipe.get("provider")):
+        raise StripError(f"{rec_src.name} has no prompt or no model/provider, so it is not a "
+                         f"render's recipe; adopt reuses generated panels only.")
+    drawn = [e.get("id") if isinstance(e, dict) else str(e).split(":")[-1].split("@")[0]
+             for e in recipe.get("entities") or []]
+    archived = archived_problem(spec, p, list(dict.fromkeys(list(p["entities"]) + drawn)))
+    if archived:
+        raise StripError(archived)
+    pdir = panels_dir(spec)
+    with locked(spec):
+        st = load_state(spec)
+        n = next_roll(spec, st, pid)
+        out = pdir / f"{pid}.r{n}.png"
+        pdir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(png, out)
+        shutil.copyfile(rec_src, Path(str(out) + ".recipe.json"))
+        pf = pdir / f"{pid}.r{n}.prompt.txt"
+        pf.write_text(recipe["prompt"].rstrip() + "\n")
+        roll = {"roll": n, "path": _rel(spec, out), "prompt": _rel(spec, pf),
+                "binding": "rendering", "problems": [], "verdict": None,
+                "adoptedFrom": {"path": str(png), "sha256": _sha(png),
+                                "recipeSha256": _sha(rec_src), "reason": why, "on": _now()}}
+        st["panels"][pid]["rolls"].append(roll)
+        save_state(spec, st)
+    ok, problems = verify(spec, p, out)
+    with locked(spec):
+        st = load_state(spec)
+        rec = next(r for r in st["panels"][pid]["rolls"] if r["roll"] == n)
+        rec.update(binding="ok" if ok else "broken", problems=problems)
         save_state(spec, st)
     return rec
 
@@ -565,6 +642,9 @@ def build_recipe(spec: dict, st: dict, out: Path, asset: str, widths: list[int],
             "entities": p["entities"], "path": str(kept), "recipe": str(kept) + ".recipe.json",
             "sha256": _sha(kept), "shift": p.get("shift", 0),
             "rolls": len(ps["rolls"]),
+            **({"adoptedFrom": kept_roll["adoptedFrom"]}
+               if (kept_roll := next((r for r in ps["rolls"] if r["path"] == ps["kept"]), {}))
+               .get("adoptedFrom") else {}),
             "rejected": [{"path": str(spec["_dir"] / r["path"]), "reason": r.get("reason")}
                          for r in ps["rolls"] if r.get("verdict") == "defect"],
         })
@@ -752,6 +832,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--verdict", required=True, choices=["pass", "defect"])
     s.add_argument("--reason", default=""); s.add_argument("--counter", default=None)
     s.add_argument("--guard", action="append", default=[], metavar="NAME=VERDICT[:why]")
+    s = sub.add_parser("adopt"); s.add_argument("spec"); s.add_argument("--panel", required=True)
+    s.add_argument("--from", dest="src", required=True); s.add_argument("--reason", required=True)
     s = sub.add_parser("reopen"); s.add_argument("spec"); s.add_argument("--panel", required=True)
     s.add_argument("--reason", required=True); s.add_argument("--counter", default=None)
     s = sub.add_parser("compose"); s.add_argument("spec")
@@ -789,6 +871,8 @@ def main(argv: list[str] | None = None) -> int:
             res = cmd_render(spec, a.panel, dry_run=a.dry_run)
         elif a.verb == "judge":
             res = cmd_judge(spec, a.panel, a.roll, a.verdict, a.reason, a.counter, a.guard)
+        elif a.verb == "adopt":
+            res = cmd_adopt(spec, a.panel, a.src, a.reason)
         elif a.verb == "reopen":
             res = cmd_reopen(spec, a.panel, a.reason, a.counter)
         elif a.verb == "compose":
