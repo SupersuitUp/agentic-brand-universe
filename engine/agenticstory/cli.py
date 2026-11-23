@@ -115,9 +115,14 @@ def build_parser() -> argparse.ArgumentParser:
     lw = _line_parser("line-reword", "give a line new words; a golden line keeps its old wording and goes up a version",
                       yes_required=False)
     lw.add_argument("--text", required=True)
+    for _p in (lw,):
+        _p.add_argument("--search-root", action="append", metavar="DIR",
+                        help="where to look for an earlier wording (repeatable; default: the universe's parent folder)")
     lr = _line_parser("line-retire", "retire a line, naming the line to say instead")
     lr.add_argument("--instead", help="the id of the line to use instead (golden, or retired with an instead of its own)")
     lr.add_argument("--note", help="why nothing replaces it, when there is no --instead")
+    lr.add_argument("--search-root", action="append", metavar="DIR",
+                    help="where to look for an earlier wording (repeatable; default: the universe's parent folder)")
     c = sub.add_parser("crossovers", help="list the crossovers an entity appears in")
     c.add_argument("universe"); c.add_argument("entity")
     rel = sub.add_parser("relations", help="list an entity's typed relations")
@@ -615,6 +620,7 @@ def main(argv: list[str] | None = None) -> int:
         root = Path(args.universe).resolve()
         if not (root / "universe.json").is_file():
             print(f"REFUSED: no universe.json in {root}"); return 1
+        old_wordings: list[str] = []
         try:
             decided = _lines.yes(args.by, args.verbatim, args.on)
             # ONE place decides which record a verb changes: the universe's own, never a second.
@@ -634,10 +640,13 @@ def main(argv: list[str] | None = None) -> int:
                 elif args.cmd == "line-reword":
                     was = _lines.find(rec, args.line_id).get("version")
                     line = _lines.reword(rec, args.line_id, args.text, decided)
+                    old_wordings = [h["text"] for h in line.get("history", []) if isinstance(h, dict) and h.get("text")]
                     said = (f"line '{line['id']}' reworded, v{was} -> v{line['version']}" if line["version"] != was
                             else f"candidate line '{line['id']}' reworded")
                 else:
+                    old_wordings = [_lines.find(rec, args.line_id).get("text")]
                     line = _lines.retire(rec, args.line_id, decided, instead=args.instead, note=args.note)
+                    old_wordings += [h["text"] for h in line.get("history", []) if isinstance(h, dict) and h.get("text")]
                     said = f"line '{line['id']}' retired; instead: {line.get('instead') or line.get('insteadNote')}"
         except _lines.LineError as e:
             print(f"REFUSED: {e}"); return 1
@@ -654,6 +663,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {p}")
             return 1
         print(f"{said}  ({path.relative_to(root)})")
+        if args.cmd in ("line-reword", "line-retire"):
+            old = [w for w in dict.fromkeys(old_wordings) if w]
+            if not old:
+                print(f"line '{line['id']}' had no earlier approved wording, so there is nothing to search for")
+            else:
+                roots = [Path(r) for r in (args.search_root or [root.parent])]
+                print(f"searching {', '.join(str(r) for r in roots)} for {len(old)} earlier wording(s)", flush=True)
+                # The record itself holds every earlier wording in its history: not a stale copy.
+                hits = [h for h in _lines.find_wordings(roots, old) if Path(h[0]).resolve() != path.resolve()]
+                for hp, hn, hw in hits:
+                    shown = " ".join(hw.split())[:60]
+                    print(f'still says an earlier wording: {hp}:{hn}  "{shown}"')
+                if not hits:
+                    print("nothing else carries an earlier wording")
         return 0
     store = CanonStore(args.universe)
 
