@@ -1,10 +1,17 @@
 # Agentic Brand Universe — Cartridge Spec
 
-**v0.64 — 2026-11-23.** The version-controlled brand-universe (cartridge) format: the first-principles
+**v0.65 — 2026-11-23.** The version-controlled brand-universe (cartridge) format: the first-principles
 architecture for a brand as version-controlled canon + golden assets, agentically writable,
 composable, and evolvable, rendered into any deliverable. Home: `agenticbranduniverse.com`.
 Reference implementations: the Nation of Fire universe (storybooks) and Build on Anthropic (a
 documentation brand: explanatory plates, ink-line illustration, share cards, a slide deck).
+
+> **v0.65 changelog — a lines record names its standard, and rewording or retiring a line prints
+> every place that still carries an earlier wording.** §13.2: a lines record may carry
+> `"standard": "https://hypercontext.wiki/standards/lines/v1"`, and `validate` refuses any other
+> value. `abu line-reword` and `abu line-retire` search the universe's parent folder (or each
+> `--search-root`) for the line's earlier wordings and print `file:line` for each hit. Additive:
+> no universe migrates.
 
 > **v0.64 changelog — a strip can KEEP an approved panel, and every drawing verb refuses an
 > archived entity.** §4.15.1: `compose-strip adopt` reuses an existing render and its recipe
@@ -3209,6 +3216,7 @@ first and never a second; line ids are unique across all of them:
 ```jsonc
 {
   "id": "brand-lines", "kind": "lines", "name": "...", "summary": "...",
+  "standard": "https://hypercontext.wiki/standards/lines/v1",   // optional; any other value is refused
   "approvers": ["Ada Reyes", "Ben Okafor"],   // whose yes makes a line golden; any ONE is enough
   "lines": [{
     "id": "what-it-is",                        // kebab-case
@@ -3305,9 +3313,23 @@ file removed). No verb leaves a record `validate` would reject, and none reports
 validated. A record file that is not valid JSON, or not UTF-8, is refused, never raised. The
 scaffolding skill is `add-or-update-line`.
 
-**What is not here yet.** A register of the surfaces a universe governs, the scan that finds a
-line on them, the generated map of which surface carries which line, and the check that fails
-on an out-of-date one are the next release. This section is the record they read.
+**The rewording search.** `abu line-reword` and `abu line-retire` end by searching for every
+earlier wording of the line (for a retire, its current wording too). The search reads text files
+(`.md`, `.mdx`, `.txt`, `.json`, `.ts`, `.tsx`, `.js`, `.mjs`, `.html`, `.yml`, `.yaml`, `.py`)
+under each `--search-root DIR` (repeatable; default the universe's parent folder), compares as two
+wordings are compared (so a wording found across a line break or inside markdown emphasis still
+counts), and skips `.git`, `node_modules` and build folders, files over 2 MB, and symlinked
+folders. It prints `searching <root> for N earlier wording(s)` first, then
+`still says an earlier wording: <path>:<line>` for each hit, or `nothing else carries an earlier
+wording`. The exit code stays 0: the search reports and does not refuse.
+
+**A record names its standard.** A lines record may carry `standard`, the address of the versioned
+standard it follows, `https://hypercontext.wiki/standards/lines/v1`. `validate` refuses any other
+value.
+
+**What is not here yet.** A register of surfaces and a check that refuses at build are not here:
+the rewording search finds old copies, and a refusal waits until an old wording ships after a
+rewording a second time.
 
 Earned 2026-10-13 on continental-works. Gary: "if you don't create the provenance chain between
 surfaces and the goldens, there's the opportunity for drift is just so natural, even for a

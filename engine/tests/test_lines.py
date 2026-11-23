@@ -281,6 +281,10 @@ class WriterVerbTest(LinesBase):
     YES = ["--by", "Ada Reyes", "--on", "2026-10-13", "--verbatim", "yes, that is the one"]
 
     def run_cli(self, *argv):
+        # The rewording search defaults to the universe's parent folder, which here is the machine's
+        # temp folder; keep these tests inside their own universe.
+        if argv[0] in ("line-reword", "line-retire") and "--search-root" not in argv:
+            argv = (*argv, "--search-root", str(self.dir))
         with redirect_stdout(io.StringIO()) as out:
             code = main(list(argv))
         return code, out.getvalue()
@@ -733,6 +737,88 @@ class WriterVerbTest(LinesBase):
             self.refused(code, out)
             self.assertIn(f"history v1 replacedOn must be a YYYY-MM-DD date, got {bad!r}", out)
         self.assertEqual(self.file.read_bytes(), before)
+
+
+STANDARD = "https://hypercontext.wiki/standards/lines/v1"
+
+
+class StandardKeyTest(LinesBase):
+    def test_standard_key_accepted_when_it_names_lines_v1(self):
+        self.assertEqual(self.problems(record(standard=STANDARD)), [])
+
+    def test_standard_key_refused_when_it_names_another_standard(self):
+        got = self.joined(record(standard="https://hypercontext.wiki/standards/friend/v1"))
+        self.assertIn("standard", got)
+        self.assertIn(L.STANDARD, got)
+
+    def test_no_standard_key_is_still_fine(self):
+        self.assertEqual(self.problems(record()), [])
+
+
+class FindWordingsTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="abu-wordings-"))
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_find_wordings_finds_an_earlier_wording_across_markup(self):
+        (self.dir / "a.md").write_text("intro\nSupersuit is *software* for your\nown computer.\n")
+        (self.dir / "b.json").write_text('{"d": "nothing here"}')
+        (self.dir / "node_modules").mkdir()
+        (self.dir / "node_modules" / "c.md").write_text("Supersuit is software for your own computer.")
+        hits = L.find_wordings([self.dir], ["Supersuit is software for your own computer."])
+        self.assertEqual([(p.endswith("a.md"), n) for p, n, _ in hits], [(True, 2)])
+
+    def test_find_wordings_skips_binary_and_git(self):
+        (self.dir / ".git").mkdir()
+        (self.dir / ".git" / "x.md").write_text("Old words.")
+        (self.dir / "img.png").write_bytes(b"\x89PNG Old words.")
+        self.assertEqual(L.find_wordings([self.dir], ["Old words."]), [])
+
+    def test_find_wordings_skips_big_files_and_symlinked_folders(self):
+        (self.dir / "big.md").write_text("Old words." + " " * (L.MAX_BYTES + 1))
+        outside = Path(tempfile.mkdtemp(prefix="abu-outside-"))
+        try:
+            (outside / "o.md").write_text("Old words.")
+            os.symlink(outside, self.dir / "link")
+            self.assertEqual(L.find_wordings([self.dir], ["Old words."]), [])
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+
+class RewordSearchTest(LinesBase):
+    YES = ["--by", "Ada Reyes", "--on", "2026-10-20", "--verbatim", "say software you own"]
+
+    def run_cli(self, *argv):
+        with redirect_stdout(io.StringIO()) as out:
+            code = main(list(argv))
+        return code, out.getvalue()
+
+    def test_reword_and_retire_print_every_place_carrying_an_earlier_wording(self):
+        self.file.write_text(json.dumps(record(line(text="The suit you build."), approvers=["Ada Reyes"])))
+        site = self.dir.parent / (self.dir.name + "-site")
+        site.mkdir()
+        try:
+            (site / "page.md").write_text("Welcome.\nThe suit you build.\n")
+            code, out = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "The suit you own.",
+                                     *self.YES, "--search-root", str(site), "--search-root", str(self.dir))
+            self.assertEqual(code, 0)
+            self.assertIn("searching", out)
+            self.assertIn("still says an earlier wording", out)
+            self.assertIn("page.md:2", out)
+            self.assertNotIn("earlier wording: " + str(self.file), out)  # the record's own history is not a stale copy
+            code, out = self.run_cli("line-retire", str(self.dir), "what-it-is", "--note", "gone", *self.YES,
+                                     "--search-root", str(site))
+            self.assertEqual(code, 0)
+            self.assertIn("page.md:2", out)
+            (site / "page.md").write_text("clean\n")
+            self.file.write_text(json.dumps(record(line(text="Fresh words here."), approvers=["Ada Reyes"])))
+            code, out = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "Newer words here.",
+                                     *self.YES, "--search-root", str(site))
+            self.assertIn("nothing else carries an earlier wording", out)
+        finally:
+            shutil.rmtree(site, ignore_errors=True)
 
 
 if __name__ == "__main__":

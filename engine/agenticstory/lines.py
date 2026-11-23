@@ -52,6 +52,7 @@ from pathlib import Path
 from typing import Any
 
 KIND = "lines"
+STANDARD = "https://hypercontext.wiki/standards/lines/v1"
 STATUSES = ("candidate", "golden", "retired")
 AUDIENCES = ("public", "client", "team", "cofounder")
 DEFAULT_FILE = "canon/craft/brand-lines.json"
@@ -205,6 +206,8 @@ def validate_lines(craft: dict) -> list[str]:
         if not (isinstance(approvers, list) and approvers and all(_str(a) for a in approvers)):
             out.append(f"lines {rid}: 'approvers' must list at least one person whose yes makes a line golden")
             approvers = []
+        if "standard" in r and r["standard"] != STANDARD:
+            out.append(f"lines {rid}: standard must be {STANDARD}, not {r['standard']!r}")
         lines = r.get("lines")
         if not isinstance(lines, list):
             out.append(f"lines {rid}: needs a 'lines' list (it may be empty)")
@@ -468,6 +471,41 @@ def retire(rec: dict, lid: str, decided: dict, instead: str | None = None, note:
     if not instead:
         line["insteadNote"] = note
     return line
+
+
+TEXT_SUFFIXES = {".md", ".mdx", ".txt", ".json", ".ts", ".tsx", ".js", ".mjs", ".html", ".yml", ".yaml", ".py"}
+SKIP_DIRS = {".git", "node_modules", "build", "dist", ".next", ".docusaurus", ".vercel"}
+MAX_BYTES = 2 * 1024 * 1024
+
+
+def find_wordings(roots, wordings) -> list[tuple[str, int, str]]:
+    """Each place under the roots that carries one of the wordings, compared as `norm` compares
+    two wordings. A wording may run across line breaks; the hit names the line where it starts.
+    Files over 2 MB, folders that hold dependencies or builds, and symlinked folders are skipped.
+    Returns sorted (path, line number, wording)."""
+    wanted = [(w, norm(w)) for w in wordings if norm(w)]
+    hits = []
+    for root in roots:
+        for dirpath, dirnames, filenames in os.walk(root):  # followlinks=False: a symlinked folder is not entered
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            for name in filenames:
+                p = Path(dirpath) / name
+                if p.suffix not in TEXT_SUFFIXES or p.is_symlink():
+                    continue
+                try:
+                    if p.stat().st_size > MAX_BYTES:
+                        continue
+                    raw = p.read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    continue
+                flat = norm(raw)
+                for w, nw in wanted:
+                    if nw not in flat:
+                        continue
+                    first = nw.split(" ")[0]
+                    line_no = next((i for i, l in enumerate(raw.splitlines(), 1) if first in norm(l)), 1)
+                    hits.append((str(p), line_no, w))
+    return sorted(hits)
 
 
 def _put(path: Path, data: bytes) -> None:
