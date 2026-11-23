@@ -478,6 +478,36 @@ SKIP_DIRS = {".git", "node_modules", "build", "dist", ".next", ".docusaurus", ".
 MAX_BYTES = 2 * 1024 * 1024
 
 
+def _flat_with_lines(raw: str) -> tuple[str, list[int]]:
+    """`norm(raw)` and, for each character of it, the 1-based line of `raw` it came from. The steps
+    are norm()'s own, done on (character, line) pairs, so a match in the flat text maps back
+    exactly, across line breaks, emphasis marks and the link around a linked word."""
+    chars: list[tuple[str, int]] = []
+    line = 1
+    for c in raw:
+        chars.append((c.translate(_QUOTES) if len(c.translate(_QUOTES)) == 1 else c, line))
+        if c == "\n":
+            line += 1
+    text = "".join(c for c, _ in chars)
+    keep = [True] * len(chars)
+    for m in re.finditer(r"\[([^\]]*)\]\([^)]*\)", text):  # keep only the link's words
+        for i in range(m.start(), m.end()):
+            keep[i] = m.start(1) <= i < m.end(1)
+    chars = [(c, n) for (c, n), k in zip(chars, keep) if k and c not in "*_`"]
+    out: list[tuple[str, int]] = []
+    for c, n in chars:
+        if c.isspace():
+            if not out or out[-1][0] != " ":
+                out.append((" ", n))
+        else:
+            out.append((c, n))
+    while out and out[-1][0] == " ":
+        out.pop()
+    while out and out[0][0] == " ":
+        out.pop(0)
+    return "".join(c for c, _ in out), [n for _, n in out]
+
+
 def find_wordings(roots, wordings) -> list[tuple[str, int, str]]:
     """Each place under the roots that carries one of the wordings, compared as `norm` compares
     two wordings. A wording may run across line breaks; the hit names the line where it starts.
@@ -485,6 +515,7 @@ def find_wordings(roots, wordings) -> list[tuple[str, int, str]]:
     Returns sorted (path, line number, wording)."""
     wanted = [(w, norm(w)) for w in wordings if norm(w)]
     hits = []
+    seen: set[tuple[str, int]] = set()
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):  # followlinks=False: a symlinked folder is not entered
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
@@ -498,13 +529,12 @@ def find_wordings(roots, wordings) -> list[tuple[str, int, str]]:
                     raw = p.read_text(encoding="utf-8")
                 except (UnicodeDecodeError, OSError):
                     continue
-                flat = norm(raw)
+                flat, src = _flat_with_lines(raw)
                 for w, nw in wanted:
-                    if nw not in flat:
-                        continue
-                    first = nw.split(" ")[0]
-                    line_no = next((i for i, l in enumerate(raw.splitlines(), 1) if first in norm(l)), 1)
-                    hits.append((str(p), line_no, w))
+                    at = flat.find(nw)
+                    if at >= 0 and (str(p), src[at]) not in seen:
+                        seen.add((str(p), src[at]))
+                        hits.append((str(p), src[at], w))
     return sorted(hits)
 
 

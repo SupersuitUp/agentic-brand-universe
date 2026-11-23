@@ -786,6 +786,17 @@ class FindWordingsTest(unittest.TestCase):
         finally:
             shutil.rmtree(outside, ignore_errors=True)
 
+    def test_the_hit_names_the_line_where_the_wording_starts_when_its_first_word_came_earlier(self):
+        (self.dir / "a.md").write_text("The suit is here.\nAnother line.\nThe suit you build.\n")
+        (self.dir / "b.md").write_text("Intro\nThe [suit](https://x.test)\nyou *build*.\n")
+        hits = L.find_wordings([self.dir], ["The suit you build."])
+        self.assertEqual([(Path(p).name, n) for p, n, _ in hits], [("a.md", 3), ("b.md", 2)])
+
+    def test_a_place_is_reported_once_even_when_two_wordings_match_there(self):
+        (self.dir / "a.md").write_text("The suit you build.\n")
+        hits = L.find_wordings([self.dir], ["The suit you build.", "The suit you"])
+        self.assertEqual(len(hits), 1)
+
 
 class RewordSearchTest(LinesBase):
     YES = ["--by", "Ada Reyes", "--on", "2026-10-20", "--verbatim", "say software you own"]
@@ -812,6 +823,7 @@ class RewordSearchTest(LinesBase):
                                      "--search-root", str(site))
             self.assertEqual(code, 0)
             self.assertIn("page.md:2", out)
+            self.assertIn('page.md:2  "The suit you build."', out)
             (site / "page.md").write_text("clean\n")
             self.file.write_text(json.dumps(record(line(text="Fresh words here."), approvers=["Ada Reyes"])))
             code, out = self.run_cli("line-reword", str(self.dir), "what-it-is", "--text", "Newer words here.",
@@ -819,6 +831,16 @@ class RewordSearchTest(LinesBase):
             self.assertIn("nothing else carries an earlier wording", out)
         finally:
             shutil.rmtree(site, ignore_errors=True)
+
+class CandidateRewordTest(LinesBase):
+    def test_rewording_a_candidate_says_there_is_nothing_to_search_for(self):
+        self.file.write_text(json.dumps(record(line(status="candidate", decided=None), approvers=["Ada Reyes"])))
+        l = json.loads(self.file.read_text()); l["lines"][0].pop("decided"); self.file.write_text(json.dumps(l))
+        with redirect_stdout(io.StringIO()) as out:
+            code = main(["line-reword", str(self.dir), "what-it-is", "--text", "A new draft."])
+        self.assertEqual(code, 0)
+        self.assertIn("no earlier approved wording", out.getvalue())
+        self.assertNotIn("searching", out.getvalue())
 
 
 if __name__ == "__main__":

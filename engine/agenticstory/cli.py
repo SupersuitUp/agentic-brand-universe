@@ -665,13 +665,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{said}  ({path.relative_to(root)})")
         if args.cmd in ("line-reword", "line-retire"):
             old = [w for w in dict.fromkeys(old_wordings) if w]
-            if old:
+            if not old:
+                print(f"line '{line['id']}' had no earlier approved wording, so there is nothing to search for")
+            else:
                 roots = [Path(r) for r in (args.search_root or [root.parent])]
                 print(f"searching {', '.join(str(r) for r in roots)} for {len(old)} earlier wording(s)", flush=True)
                 # The record itself holds every earlier wording in its history: not a stale copy.
                 hits = [h for h in _lines.find_wordings(roots, old) if Path(h[0]).resolve() != path.resolve()]
-                for hp, hn, _w in hits:
-                    print(f"still says an earlier wording: {hp}:{hn}")
+                for hp, hn, hw in hits:
+                    shown = " ".join(hw.split())[:60]
+                    print(f'still says an earlier wording: {hp}:{hn}  "{shown}"')
                 if not hits:
                     print("nothing else carries an earlier wording")
         return 0
