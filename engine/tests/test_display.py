@@ -45,6 +45,36 @@ class WhereTheLibraryIs(unittest.TestCase):
             self.assertEqual(display.freedom_lib(env={display.ENV_LIB: str(lib)}).parent, lib)
 
 
+class TheSupersuitCache(unittest.TestCase):
+    """Freedom became Supersuit on 2026-10-14 and its plugin cache moved from
+    freedom-workspace/freedom to supersuit/supersuit. With only the old root known, every
+    board on a Supersuit machine reported "no Freedom install" and degraded to a text card
+    (2026-11-23, the works board for the orb-free wiki heroes)."""
+
+    def test_the_supersuit_root_is_found_when_the_old_freedom_root_is_absent(self):
+        import os
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as new, tempfile.TemporaryDirectory() as old:
+            _fake_freedom(new, versions=("8.9.0",))
+            env = {k: v for k, v in os.environ.items() if k != "FREEDOM_CACHE_DIR"}
+            with mock.patch.object(display, "FREEDOM_CACHE_ROOTS", (new, old)):
+                self.assertEqual(display.freedom_lib(env=env).parts[-4], "8.9.0")
+
+    def test_one_shared_list_names_supersuit_first_and_every_board_reads_it(self):
+        import json
+        roots = json.loads((pathlib.Path(display.__file__).with_name(
+            "freedom_cache_roots.json")).read_text())["roots"]
+        self.assertTrue(roots[0].endswith("cache/supersuit/supersuit"))
+        self.assertEqual(tuple(roots), display.FREEDOM_CACHE_ROOTS)
+        repo = pathlib.Path(display.__file__).resolve().parents[2]
+        for f in ("skills/approve-works/frapps/works-board.mjs",
+                  "skills/approve-works/frapps/mount.mjs",
+                  "skills/shoot-references/frapps/shot-board.mjs"):
+            src = (repo / f).read_text()
+            self.assertIn("freedom_cache_roots.json", src, f)
+            self.assertNotIn('"freedom-workspace", "freedom"', src, f)
+
+
 class WhichChannel(unittest.TestCase):
     def test_a_freedom_install_and_node_give_the_frapp(self):
         with tempfile.TemporaryDirectory() as root:

@@ -65,7 +65,27 @@ CHANNELS = (FRAPP, CARD)
 # newest-wins rule a scaffolded frapp resolves at ITS start; see `freedomLib()` in
 # create-or-manage-frapp/scripts/scaffold.mjs. Never a pinned version: the next plugin
 # update deletes that directory (freedom#106).
-FREEDOM_CACHE = "~/.claude/plugins/cache/freedom-workspace/freedom"
+# THE ONE LIST of cache roots, shared with every board's .mjs resolver, newest product name
+# first (Freedom became Supersuit on 2026-10-14 and its cache moved with it).
+_ROOTS_FILE = pathlib.Path(__file__).with_name("freedom_cache_roots.json")
+FREEDOM_CACHE_ROOTS = tuple(__import__("json").loads(_ROOTS_FILE.read_text())["roots"])
+FREEDOM_CACHE = FREEDOM_CACHE_ROOTS[0]
+
+
+def freedom_cache(file: str = "freedom-frapp.mjs", env=None) -> pathlib.Path:
+    """The first cache root holding an installed version with `file`, else the first root.
+    FREEDOM_CACHE_DIR overrides the list."""
+    env = os.environ if env is None else env
+    if env.get("FREEDOM_CACHE_DIR"):
+        return pathlib.Path(env["FREEDOM_CACHE_DIR"]).expanduser()
+    for r in FREEDOM_CACHE_ROOTS:
+        root = pathlib.Path(r).expanduser()
+        try:
+            if any((d / ".agents" / "lib" / file).is_file() for d in root.iterdir()):
+                return root
+        except OSError:
+            continue
+    return pathlib.Path(FREEDOM_CACHE_ROOTS[0]).expanduser()
 ENV_LIB = "FREEDOM_LIB_DIR"   # a dev checkout's .agents/lib, for the maintainer's machine
 LIB_FILE = "freedom-frapp.mjs"
 
@@ -81,7 +101,7 @@ def freedom_lib(file: str = LIB_FILE, env=None) -> pathlib.Path | None:
     if override:
         p = pathlib.Path(override).expanduser() / file
         return p if p.is_file() else None
-    cache = pathlib.Path(env.get("FREEDOM_CACHE_DIR") or FREEDOM_CACHE).expanduser()
+    cache = freedom_cache(file, env)
     try:
         versions = [d for d in cache.iterdir() if (d / ".agents" / "lib" / file).is_file()]
     except OSError:
@@ -126,7 +146,7 @@ def resolve_channel(env=None) -> tuple[str, str]:
                       "operator the art.")
     if freedom_lib(env=env) is None:
         return CARD, (f"no Freedom install on this machine (no {LIB_FILE} under "
-                      f"{FREEDOM_CACHE}), so there is no frapp to serve the picture and the "
+                      f"{' or '.join(FREEDOM_CACHE_ROOTS)}), so there is no frapp to serve the picture and the "
                       f"board is an AskUserQuestion card. Its preview is TEXT: it carries the "
                       f"path and the checklist and cannot carry the picture. Nothing here has "
                       f"shown the operator the art.")

@@ -15,7 +15,7 @@
 // NOTHING OF THE STORE LIVES HERE. The registry, the token and the link shape are Freedom's
 // (`freedom-frapp-host.mjs`), resolved from the newest installed Freedom at every start, never a
 // pinned version (freedom#106). This file only decides whether the row already points here.
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -27,8 +27,18 @@ const SLUG = argOf("--slug", "abu-works");
 const FILE = resolve(argOf("--file", ""));
 const say = (o) => { console.log(JSON.stringify(o)); process.exit(o.ok ? 0 : 1); };
 
-const CACHE = process.env.FREEDOM_CACHE_DIR
-  || join(homedir(), ".claude", "plugins", "cache", "freedom-workspace", "freedom");
+const CACHE = (() => {
+  // THE ONE LIST of cache roots (engine/agenticstory/freedom_cache_roots.json), newest product
+  // name first: Freedom became Supersuit on 2026-10-14 and its cache moved with it.
+  if (process.env.FREEDOM_CACHE_DIR) return process.env.FREEDOM_CACHE_DIR;
+  const listFile = new URL("../../../engine/agenticstory/freedom_cache_roots.json", import.meta.url);
+  const roots = JSON.parse(readFileSync(listFile, "utf8")).roots
+    .map((r) => r.replace(/^~(?=\/)/, homedir()));
+  return roots.find((r) => {
+    try { return readdirSync(r).some((v) => existsSync(join(r, v, ".agents", "lib", "freedom-frapp.mjs"))); }
+    catch { return false; }
+  }) || roots[0];
+})();
 function freedom(rel) {
   const dev = process.env.FREEDOM_LIB_DIR;
   if (dev && rel.startsWith(".agents/lib/") && existsSync(join(dev, rel.slice(12)))) return join(dev, rel.slice(12));

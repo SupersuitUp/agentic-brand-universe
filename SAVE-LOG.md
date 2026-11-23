@@ -1,3 +1,7 @@
+## 2026-11-23: boards find a Supersuit install (v1.50.1)
+
+- 2026-11-23 v1.50.1: the works board, shot board and display resolver read one shared list of plugin-cache roots (engine/agenticstory/freedom_cache_roots.json), Supersuit first. Since the Freedom to Supersuit rename every board on a Supersuit machine said "no Freedom install" and fell back to a text card.
+
 ## 2026-11-23: a strip keeps an approved panel; every drawing verb refuses an archived entity (v1.50.0, spec v0.64)
 
 - 2026-11-23 v1.50.0: `compose-strip adopt` reuses an approved render and its recipe byte for byte as a panel, and compose-strip plus `on-brand-image --entity` now refuse archived entities through one engine check (`lifecycle.py`) shared with compose-spread. Earned by the continental-works orb retirement, where a strip would have redrawn an approved panel and still drawn the retired orb.

@@ -47,8 +47,18 @@ const PY = process.env.ABU_PYTHON || "python3";
 // the newest installed one, so the token gate, the tailnet route, the journal, the
 // secure-origin refusal and the design system are inherited and improve without ABU shipping
 // anything.
-const FREEDOM_CACHE = process.env.FREEDOM_CACHE_DIR
-  || join(homedir(), ".claude", "plugins", "cache", "freedom-workspace", "freedom");
+const FREEDOM_CACHE = (() => {
+  // THE ONE LIST of cache roots (engine/agenticstory/freedom_cache_roots.json), newest product
+  // name first: Freedom became Supersuit on 2026-10-14 and its cache moved with it.
+  if (process.env.FREEDOM_CACHE_DIR) return process.env.FREEDOM_CACHE_DIR;
+  const listFile = new URL("../../../engine/agenticstory/freedom_cache_roots.json", import.meta.url);
+  const roots = JSON.parse(readFileSync(listFile, "utf8")).roots
+    .map((r) => r.replace(/^~(?=\/)/, homedir()));
+  return roots.find((r) => {
+    try { return readdirSync(r).some((v) => existsSync(join(r, v, ".agents", "lib", "freedom-frapp.mjs"))); }
+    catch { return false; }
+  }) || roots[0];
+})();
 function freedomLib(file) {
   const dev = process.env.FREEDOM_LIB_DIR;
   if (dev && existsSync(join(dev, file))) return join(dev, file);

@@ -1,0 +1,7 @@
+{
+ "_note": "Where an installed Supersuit (formerly Freedom) keeps its versioned plugin copies, newest product name first. The ONE list every ABU board resolver reads (display.py, works-board.mjs, mount.mjs, shot-board.mjs); FREEDOM_CACHE_DIR overrides it. The product was renamed Freedom -> Supersuit on 2026-10-14 and its cache moved from freedom-workspace/freedom to supersuit/supersuit; with only the old root listed, every board on a Supersuit machine reported 'no Freedom install' and fell back to a text card (2026-11-23).",
+ "roots": [
+  "~/.claude/plugins/cache/supersuit/supersuit",
+  "~/.claude/plugins/cache/freedom-workspace/freedom"
+ ]
+}
