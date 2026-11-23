@@ -49,8 +49,12 @@ function freedom(rel) {
 }
 
 if (!existsSync(FILE)) say({ ok: false, why: `no board page at ${FILE}` });
-const hostLib = freedom(".agents/lib/freedom-frapp-host.mjs");
-const hostCli = freedom(".agents/skills/create-or-manage-frapp/scripts/host.mjs");
+// The store's library and CLI were renamed with the product (frapp -> tile app -> supertool,
+// Freedom -> Supersuit). Newest name first; the old names still resolve on an older install.
+const firstOf = (...rels) => rels.map(freedom).find(Boolean) || null;
+const hostLib = firstOf(".agents/lib/supersuit-tile-app-host.mjs", ".agents/lib/freedom-frapp-host.mjs");
+const hostCli = firstOf(".agents/skills/create-or-manage-a-supertool/scripts/host.mjs",
+                        ".agents/skills/create-or-manage-frapp/scripts/host.mjs");
 if (!hostLib || !hostCli) say({ ok: false, why: `no Freedom install under ${CACHE}, so there is no frapp store to mount in` });
 const H = await import(pathToFileURL(hostLib).href);
 

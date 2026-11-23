@@ -1,3 +1,7 @@
+## 2026-11-23: a works board mounts in a Supersuit store (v1.50.2)
+
+- 2026-11-23 v1.50.2: the works board's mount resolves the store's renamed host library and CLI (supersuit-tile-app-host.mjs, create-or-manage-a-supertool), newest name first. 1.50.1 found the Supersuit cache but still could not mount a board there.
+
 ## 2026-11-23: boards find a Supersuit install (v1.50.1)
 
 - 2026-11-23 v1.50.1: the works board, shot board and display resolver read one shared list of plugin-cache roots (engine/agenticstory/freedom_cache_roots.json), Supersuit first. Since the Freedom to Supersuit rename every board on a Supersuit machine said "no Freedom install" and fell back to a text card.

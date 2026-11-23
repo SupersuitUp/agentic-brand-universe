@@ -73,6 +73,13 @@ class TheSupersuitCache(unittest.TestCase):
             src = (repo / f).read_text()
             self.assertIn("freedom_cache_roots.json", src, f)
             self.assertNotIn('"freedom-workspace", "freedom"', src, f)
+        src = (repo / "skills/approve-works/frapps/mount.mjs").read_text()
+        mount = src[src.index("const hostLib"):src.index("if (!hostLib")]
+        # The store's host library and CLI were renamed with the product; mounting a works
+        # board on a Supersuit machine needs the new names, newest first.
+        self.assertLess(mount.index("supersuit-tile-app-host.mjs"), mount.index("freedom-frapp-host.mjs"))
+        self.assertLess(mount.index("create-or-manage-a-supertool/scripts/host.mjs"),
+                        mount.index("create-or-manage-frapp/scripts/host.mjs"))
 
 
 class WhichChannel(unittest.TestCase):
